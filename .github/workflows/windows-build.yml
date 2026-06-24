@@ -1,0 +1,57 @@
+name: Build Windows application
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Prepare application files
+        run: |
+          node work/build-standalone.js
+          New-Item -ItemType Directory -Force desktop/electron/app | Out-Null
+          Copy-Item outputs/pdf-page-studio/index.html desktop/electron/app/index.html -Force
+
+      - name: Install desktop dependencies
+        working-directory: desktop/electron
+        run: npm install --no-audit --no-fund
+
+      - name: Build installer and portable EXE
+        working-directory: desktop/electron
+        run: npm run dist:win
+
+      - name: Generate SHA-256 checksums
+        working-directory: desktop/electron
+        run: |
+          Get-ChildItem dist -Filter *.exe |
+            Get-FileHash -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } |
+            Set-Content -Encoding ascii dist/SHA256SUMS.txt
+
+      - name: Upload Windows files
+        uses: actions/upload-artifact@v4
+        with:
+          name: PDF-Studio-Windows
+          path: |
+            desktop/electron/dist/*.exe
+            desktop/electron/dist/SHA256SUMS.txt
+          if-no-files-found: error
