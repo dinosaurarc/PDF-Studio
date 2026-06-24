@@ -8,7 +8,12 @@ on:
 
 permissions:
   contents: write
-
+  
+env:
+  GH_OWNER: dinosaurarc
+  GH_REPO: PDF-Studio
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
 jobs:
   build-windows:
     runs-on: windows-latest
