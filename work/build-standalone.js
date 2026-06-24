@@ -51,6 +51,24 @@ __CSS__
           <button class="text-btn" id="printBtn" title="打印当前整理后的 PDF">
             <span>打印</span>
           </button>
+          <div class="other-menu-wrap">
+            <button class="text-btn" id="otherBtn" title="其他功能" aria-haspopup="menu" aria-expanded="false">
+              <span>其他</span>
+            </button>
+            <div id="otherMenu" class="export-menu other-menu hidden" role="menu">
+              <button id="menuSearchBtn" class="narrow-search-item" role="menuitem">搜索文字</button>
+              <button id="menuPrintBtn" class="narrow-print-item" role="menuitem">打印</button>
+              <button id="menuZoomOutBtn" class="narrow-zoom-item" role="menuitem">缩小预览</button>
+              <button id="menuZoomInBtn" class="narrow-zoom-item" role="menuitem">放大预览</button>
+              <button id="menuFitBtn" class="narrow-zoom-item" role="menuitem">适合页面</button>
+              <button id="menuContinuousBtn" class="narrow-mode-item" role="menuitem">连续阅读</button>
+              <button id="menuSingleBtn" class="narrow-mode-item" role="menuitem">单页阅读</button>
+              <button id="menuOverviewBtn" class="narrow-mode-item" role="menuitem">页面总览</button>
+              <span class="menu-divider narrow-menu-divider"></span>
+              <button id="checkUpdateBtn" class="desktop-menu-item hidden" role="menuitem">检查更新</button>
+              <button id="uninstallBtn" class="desktop-menu-item danger-menu-item hidden" role="menuitem">卸载</button>
+            </div>
+          </div>
           <span class="toolbar-sep"></span>
           <div class="search-box" role="search">
             <input id="searchInput" type="search" placeholder="搜索文字" aria-label="搜索 PDF 文字">
@@ -108,8 +126,7 @@ __CSS__
         <div id="dropZone" class="drop-zone">
           <div class="drop-card">
             <i data-lucide="file-up"></i>
-            <h2>拖入 PDF、PNG 或 JPG</h2>
-            <p>第二份 PDF 会自动接在第一份后面；图片会作为新页面加入 PDF。</p>
+            <h2>拖入文件</h2>
             <button id="emptyOpenBtn" class="primary-btn">选择文件</button>
           </div>
         </div>
@@ -253,10 +270,55 @@ __CSS__
               <label><input type="radio" name="exportQuality" value="compact"><span><b>小体积</b><small id="qualityEstimateCompact">估算中</small></span></label>
             </div>
           </fieldset>
+          <fieldset id="wordModeGroup" class="export-choice-group hidden">
+            <legend>Word 转换方式</legend>
+            <div class="export-choice-grid">
+              <label><input type="radio" name="wordMode" value="fidelity" checked><span><b>保留原版式</b><small>间距、颜色和排版最接近 PDF</small></span></label>
+              <label><input type="radio" name="wordMode" value="editable"><span><b>可编辑文字</b><small>适合继续编辑，复杂排版可能变化</small></span></label>
+            </div>
+          </fieldset>
           <p id="exportDialogNote" class="export-dialog-note">预估大小会因页面内容有所浮动。下一步可在系统窗口中填写文件名并选择保存位置；多张图片会保存为 ZIP。</p>
           <div class="modal-actions">
             <button id="exportCancelBtn" class="wide-btn">取消</button>
             <button id="exportConfirmBtn" class="primary-btn">下一步</button>
+          </div>
+        </div>
+      </div>
+      <div id="updateDialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="updateDialogTitle">
+        <div class="modal-card update-dialog-card">
+          <h2 id="updateDialogTitle">软件更新</h2>
+          <p id="updateDialogMessage">正在检查更新…</p>
+          <div id="updateVersion" class="update-version hidden"></div>
+          <div id="updateProgressWrap" class="update-progress hidden">
+            <div><span>下载进度</span><b id="updateProgressText">0%</b></div>
+            <progress id="updateProgress" max="100" value="0"></progress>
+          </div>
+          <div class="modal-actions">
+            <button id="updateCloseBtn" class="wide-btn">关闭</button>
+            <button id="updateActionBtn" class="primary-btn hidden">下载更新</button>
+          </div>
+        </div>
+      </div>
+      <div id="uninstallDialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="uninstallDialogTitle">
+        <div class="modal-card">
+          <h2 id="uninstallDialogTitle">卸载 PDF大编辑？</h2>
+          <p>软件和本地设置将被删除，你的 PDF、图片和导出文件不会被删除。</p>
+          <div class="modal-actions">
+            <button id="uninstallCancelBtn" class="wide-btn">取消</button>
+            <button id="uninstallConfirmBtn" class="primary-btn danger-primary">卸载并退出</button>
+          </div>
+        </div>
+      </div>
+      <div id="printDialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="printDialogTitle">
+        <div class="modal-card print-dialog-card">
+          <div class="print-dialog-head">
+            <h2 id="printDialogTitle">打印预览</h2>
+            <span id="printPageSummary"></span>
+          </div>
+          <iframe id="printPreviewFrame" title="打印预览"></iframe>
+          <div class="modal-actions">
+            <button id="printCancelBtn" class="wide-btn">关闭</button>
+            <button id="printConfirmBtn" class="primary-btn">打印</button>
           </div>
         </div>
       </div>

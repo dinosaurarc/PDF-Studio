@@ -28,6 +28,7 @@ const state = {
   lineMode: false,
   lineBrush: { color: "#202124", lineWidth: 3, dash: "solid" },
   exportScope: "all",
+  update: { status: "idle", currentVersion: "", version: "", portable: false, supported: false },
   thumbRailCollapsed: false,
   sidePanelCollapsed: false,
   sidePanelWasNarrow: window.innerWidth < 1120,
@@ -53,6 +54,18 @@ const els = {
   exportSelectedMenuBtn: document.querySelector("#exportSelectedMenuBtn"),
   exportSelectedMenuLabel: document.querySelector("#exportSelectedMenuLabel"),
   printBtn: document.querySelector("#printBtn"),
+  otherBtn: document.querySelector("#otherBtn"),
+  otherMenu: document.querySelector("#otherMenu"),
+  menuSearchBtn: document.querySelector("#menuSearchBtn"),
+  menuPrintBtn: document.querySelector("#menuPrintBtn"),
+  menuZoomOutBtn: document.querySelector("#menuZoomOutBtn"),
+  menuZoomInBtn: document.querySelector("#menuZoomInBtn"),
+  menuFitBtn: document.querySelector("#menuFitBtn"),
+  menuContinuousBtn: document.querySelector("#menuContinuousBtn"),
+  menuSingleBtn: document.querySelector("#menuSingleBtn"),
+  menuOverviewBtn: document.querySelector("#menuOverviewBtn"),
+  checkUpdateBtn: document.querySelector("#checkUpdateBtn"),
+  uninstallBtn: document.querySelector("#uninstallBtn"),
   searchInput: document.querySelector("#searchInput"),
   searchBtn: document.querySelector("#searchBtn"),
   prevBtn: document.querySelector("#prevBtn"),
@@ -117,6 +130,7 @@ const els = {
   exportDialog: document.querySelector("#exportDialog"),
   exportRangeSummary: document.querySelector("#exportRangeSummary"),
   exportQualityGroup: document.querySelector("#exportQualityGroup"),
+  wordModeGroup: document.querySelector("#wordModeGroup"),
   exportDialogNote: document.querySelector("#exportDialogNote"),
   qualityEstimateOriginal: document.querySelector("#qualityEstimateOriginal"),
   qualityEstimateHigh: document.querySelector("#qualityEstimateHigh"),
@@ -124,6 +138,22 @@ const els = {
   qualityEstimateCompact: document.querySelector("#qualityEstimateCompact"),
   exportConfirmBtn: document.querySelector("#exportConfirmBtn"),
   exportCancelBtn: document.querySelector("#exportCancelBtn"),
+  updateDialog: document.querySelector("#updateDialog"),
+  updateDialogMessage: document.querySelector("#updateDialogMessage"),
+  updateVersion: document.querySelector("#updateVersion"),
+  updateProgressWrap: document.querySelector("#updateProgressWrap"),
+  updateProgress: document.querySelector("#updateProgress"),
+  updateProgressText: document.querySelector("#updateProgressText"),
+  updateCloseBtn: document.querySelector("#updateCloseBtn"),
+  updateActionBtn: document.querySelector("#updateActionBtn"),
+  uninstallDialog: document.querySelector("#uninstallDialog"),
+  uninstallCancelBtn: document.querySelector("#uninstallCancelBtn"),
+  uninstallConfirmBtn: document.querySelector("#uninstallConfirmBtn"),
+  printDialog: document.querySelector("#printDialog"),
+  printPreviewFrame: document.querySelector("#printPreviewFrame"),
+  printPageSummary: document.querySelector("#printPageSummary"),
+  printCancelBtn: document.querySelector("#printCancelBtn"),
+  printConfirmBtn: document.querySelector("#printConfirmBtn"),
   loadingBar: document.querySelector("#loadingBar"),
   loadingText: document.querySelector("#loadingText"),
   loadingPercent: document.querySelector("#loadingPercent"),
@@ -144,6 +174,7 @@ let navigatorUpdateFrame;
 let exportEstimateToken = 0;
 let renderToken = 0;
 let pendingCloseChoice = null;
+let printPreviewUrl = null;
 const fileHandles = new WeakMap();
 const nativeOpenKeys = new Set();
 const localFontSources = new Map();
@@ -157,6 +188,7 @@ syncSidePanelForViewport(true);
 updateUi();
 maybeLoadDemo();
 enableOfflineWebApp();
+configureDesktopFeatures();
 
 function enableOfflineWebApp() {
   if (location.protocol !== "https:" || !("serviceWorker" in navigator)) return;
@@ -175,6 +207,184 @@ function enableOfflineWebApp() {
       console.warn("离线缓存启用失败", error);
     });
   }, { once: true });
+}
+
+async function configureDesktopFeatures() {
+  if (!window.pdfStudioGetRuntimeInfo) {
+    document.body.classList.add("no-desktop-actions");
+    return;
+  }
+  try {
+    const info = await window.pdfStudioGetRuntimeInfo();
+    state.update = { ...state.update, ...(info || {}), supported: Boolean(info?.updateSupported) };
+    els.checkUpdateBtn.classList.remove("hidden");
+    els.uninstallBtn.classList.remove("hidden");
+    if (info?.portable) els.checkUpdateBtn.textContent = "检查更新（免安装版）";
+    window.pdfStudioOnUpdateState?.(applyUpdateState);
+  } catch (error) {
+    console.warn("无法读取桌面版信息", error);
+  }
+}
+
+function toggleOtherMenu() {
+  const opening = els.otherMenu.classList.contains("hidden");
+  els.otherMenu.classList.toggle("hidden", !opening);
+  els.otherBtn.setAttribute("aria-expanded", String(opening));
+  if (opening) closeExportMenu();
+}
+
+function closeOtherMenu() {
+  els.otherMenu.classList.add("hidden");
+  els.otherBtn.setAttribute("aria-expanded", "false");
+}
+
+function openCompactSearch() {
+  closeOtherMenu();
+  const searchBox = els.searchInput.closest(".search-box");
+  searchBox.classList.add("compact-open");
+  els.searchInput.focus();
+}
+
+function adjustZoomFromMenu(delta) {
+  closeOtherMenu();
+  if (!currentPage() || state.mode === "overview") return;
+  els.zoomSlider.value = String(clamp(
+    Number(els.zoomSlider.value) + delta,
+    Number(els.zoomSlider.min),
+    Number(els.zoomSlider.max),
+  ));
+  handleZoomSliderInput();
+}
+
+function setModeFromMenu(mode) {
+  closeOtherMenu();
+  setMode(mode);
+}
+
+async function checkForUpdates() {
+  closeOtherMenu();
+  openUpdateDialog();
+  if (!window.pdfStudioCheckForUpdates) {
+    applyUpdateState({ status: "unsupported", message: "网页版不需要安装更新，刷新网页即可使用最新版本。" });
+    return;
+  }
+  applyUpdateState({
+    status: "checking",
+    currentVersion: state.update.currentVersion,
+    message: state.update.portable ? "免安装版不会自动安装更新，正在检查是否有新版本…" : "正在检查更新…",
+  });
+  try {
+    const result = await window.pdfStudioCheckForUpdates();
+    if (result) applyUpdateState(result);
+  } catch (error) {
+    applyUpdateState({ status: "error", message: friendlyUpdateError(error) });
+  }
+}
+
+function openUpdateDialog() {
+  els.updateDialog.classList.remove("hidden");
+  els.updateCloseBtn.focus();
+}
+
+function closeUpdateDialog() {
+  els.updateDialog.classList.add("hidden");
+}
+
+function applyUpdateState(nextState = {}) {
+  state.update = { ...state.update, ...nextState };
+  const { status, currentVersion, version, portable, message } = state.update;
+  els.updateDialogMessage.textContent = message || updateStatusMessage(status, portable);
+  els.updateVersion.classList.toggle("hidden", !currentVersion && !version);
+  els.updateVersion.textContent = version
+    ? `当前版本 ${currentVersion || "未知"} · 新版本 ${version}`
+    : currentVersion ? `当前版本 ${currentVersion}` : "";
+  const progress = clamp(Number(nextState.percent ?? state.update.percent ?? 0), 0, 100);
+  const showProgress = status === "downloading";
+  els.updateProgressWrap.classList.toggle("hidden", !showProgress);
+  els.updateProgress.value = progress;
+  els.updateProgressText.textContent = `${Math.round(progress)}%`;
+  els.updateActionBtn.classList.toggle("hidden", !["available", "downloaded"].includes(status) || portable);
+  els.updateActionBtn.disabled = false;
+  els.updateActionBtn.textContent = status === "downloaded" ? "重启并安装" : "下载更新";
+  if (!els.updateDialog.classList.contains("hidden")) return;
+  if (["available", "downloaded", "error"].includes(status)) openUpdateDialog();
+}
+
+function updateStatusMessage(status, portable) {
+  if (portable && status === "available") return "发现新版本。免安装版不会自动安装，请前往 GitHub Release 手动下载。";
+  const messages = {
+    checking: "正在检查更新…",
+    current: "当前已是最新版本。",
+    available: "发现新版本，可以立即下载。",
+    downloading: "正在下载更新，请不要关闭软件。",
+    downloaded: "更新已下载完成，重启软件即可安装。",
+    unsupported: "当前版本不支持自动安装更新。",
+    error: "检查更新失败，请稍后重试。",
+  };
+  return messages[status] || "请选择要执行的操作。";
+}
+
+async function handleUpdateAction() {
+  els.updateActionBtn.disabled = true;
+  try {
+    if (state.update.status === "available") {
+      applyUpdateState({ status: "downloading", percent: 0 });
+      await window.pdfStudioDownloadUpdate?.();
+      return;
+    }
+    if (state.update.status === "downloaded") {
+      const canClose = await window.pdfStudioBeforeAppClose();
+      if (!canClose) return;
+      await window.pdfStudioInstallUpdate?.();
+    }
+  } catch (error) {
+    applyUpdateState({ status: "error", message: friendlyUpdateError(error) });
+  } finally {
+    els.updateActionBtn.disabled = false;
+  }
+}
+
+function friendlyUpdateError(error) {
+  const text = error?.message || String(error || "");
+  if (/network|internet|ENOTFOUND|ECONN|timed? ?out|ERR_/i.test(text)) {
+    return "无法连接更新服务器，请检查网络后重试。";
+  }
+  if (/404|release|latest\.yml|latest-mac\.yml/i.test(text)) {
+    return "暂时找不到可用的正式版本，请确认 GitHub Release 已发布完整更新文件。";
+  }
+  if (/signature|code sign|not signed/i.test(text)) {
+    return "更新包签名验证失败，为保护你的文件，本次更新已停止。";
+  }
+  return "检查更新失败，请稍后重试。";
+}
+
+function openUninstallDialog() {
+  closeOtherMenu();
+  els.uninstallDialog.classList.remove("hidden");
+  els.uninstallCancelBtn.focus();
+}
+
+function closeUninstallDialog() {
+  els.uninstallDialog.classList.add("hidden");
+}
+
+async function confirmUninstall() {
+  closeUninstallDialog();
+  if (!window.pdfStudioUninstallApplication) {
+    showToast("网页版无需卸载，关闭网页即可。");
+    return;
+  }
+  const canClose = await window.pdfStudioBeforeAppClose();
+  if (!canClose) return;
+  showLoading("正在卸载 PDF大编辑…", 40);
+  try {
+    const result = await window.pdfStudioUninstallApplication();
+    if (result?.cancelled) hideLoading();
+    else if (result?.message) showToast(result.message);
+  } catch (error) {
+    hideLoading();
+    showToast(error?.message || "无法启动卸载，请稍后重试。");
+  }
 }
 
 function bindEvents() {
@@ -227,6 +437,32 @@ function bindEvents() {
   els.exportAllMenuBtn.addEventListener("click", () => openExportDialog("all"));
   els.exportSelectedMenuBtn.addEventListener("click", () => openExportDialog("selected"));
   els.printBtn.addEventListener("click", printFullPdf);
+  els.otherBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleOtherMenu();
+  });
+  els.menuPrintBtn.addEventListener("click", () => {
+    closeOtherMenu();
+    printFullPdf();
+  });
+  els.menuSearchBtn.addEventListener("click", openCompactSearch);
+  els.menuZoomOutBtn.addEventListener("click", () => adjustZoomFromMenu(-10));
+  els.menuZoomInBtn.addEventListener("click", () => adjustZoomFromMenu(10));
+  els.menuFitBtn.addEventListener("click", () => {
+    closeOtherMenu();
+    resetZoomToFit();
+  });
+  els.menuContinuousBtn.addEventListener("click", () => setModeFromMenu("continuous"));
+  els.menuSingleBtn.addEventListener("click", () => setModeFromMenu("single"));
+  els.menuOverviewBtn.addEventListener("click", () => setModeFromMenu("overview"));
+  els.checkUpdateBtn.addEventListener("click", checkForUpdates);
+  els.uninstallBtn.addEventListener("click", openUninstallDialog);
+  els.updateCloseBtn.addEventListener("click", closeUpdateDialog);
+  els.updateActionBtn.addEventListener("click", handleUpdateAction);
+  els.uninstallCancelBtn.addEventListener("click", closeUninstallDialog);
+  els.uninstallConfirmBtn.addEventListener("click", confirmUninstall);
+  els.printCancelBtn.addEventListener("click", closePrintPreview);
+  els.printConfirmBtn.addEventListener("click", printPreviewDocument);
   els.searchBtn.addEventListener("click", searchText);
   els.searchInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") searchText();
@@ -280,6 +516,7 @@ function bindEvents() {
   bindAnnotationControls();
   document.addEventListener("click", (event) => {
     if (!event.target.closest(".export-menu-wrap")) closeExportMenu();
+    if (!event.target.closest(".other-menu-wrap")) closeOtherMenu();
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !els.exportMenu.classList.contains("hidden")) {
@@ -290,6 +527,26 @@ function bindEvents() {
     if (event.key === "Escape" && !els.exportDialog.classList.contains("hidden")) {
       event.preventDefault();
       closeExportDialog();
+      return;
+    }
+    if (event.key === "Escape" && !els.otherMenu.classList.contains("hidden")) {
+      event.preventDefault();
+      closeOtherMenu();
+      return;
+    }
+    if (event.key === "Escape" && !els.updateDialog.classList.contains("hidden")) {
+      event.preventDefault();
+      closeUpdateDialog();
+      return;
+    }
+    if (event.key === "Escape" && !els.uninstallDialog.classList.contains("hidden")) {
+      event.preventDefault();
+      closeUninstallDialog();
+      return;
+    }
+    if (event.key === "Escape" && !els.printDialog.classList.contains("hidden")) {
+      event.preventDefault();
+      closePrintPreview();
       return;
     }
     if (pendingCloseChoice && event.key === "Escape") {
@@ -440,11 +697,18 @@ async function closeDocument(id) {
       if (result === "cancelled" || result === "failed") return;
     }
   }
+  releaseNativeOpenKey(doc.fileHandle);
   state.documents.splice(index, 1);
   if (!state.documents.length) createDocument("未命名文档");
   state.activeDocId = state.documents[Math.max(0, index - 1)]?.id || state.documents[0].id;
   state.selectedAnnotationId = null;
   renderAll();
+}
+
+function releaseNativeOpenKey(handle) {
+  if (!handle) return;
+  const key = handle.__pdfStudioNativePath || handle.__pdfStudioNativeToken || handle.name;
+  if (key) nativeOpenKeys.delete(key);
 }
 
 window.pdfStudioBeforeAppClose = async () => {
@@ -1751,6 +2015,7 @@ function selectAllPages(forceSelect = false) {
 }
 
 async function searchText() {
+  els.searchInput.closest(".search-box")?.classList.remove("compact-open");
   const query = els.searchInput.value.trim();
   if (!query) {
     clearSearch();
@@ -2355,46 +2620,61 @@ async function saveDocument(doc) {
   if (!doc.pages.length) return "failed";
   const accessResult = await ensureSourceHandle(doc);
   if (accessResult === "cancelled" || accessResult === "failed") return accessResult;
-  const bytes = await buildPdfBytes(doc.pages);
-  const sourceResult = await saveBytesToSource(bytes, doc);
-  if (sourceResult === "saved") {
-    doc.dirty = false;
-    renderTabs();
-    return "source";
-  }
-  if (sourceResult === "cancelled" || sourceResult === "failed") return sourceResult;
-  if (doc.sourceFileExpected) return "failed";
+  showLoading("正在准备保存…", 2);
+  try {
+    const bytes = await buildPdfBytes(doc.pages, (completed, total) => {
+      updateLoading(`正在整理第 ${completed} / ${total} 页`, 5 + (completed / total) * 82);
+    });
+    updateLoading("正在写入文件…", 92);
+    const sourceResult = await saveBytesToSource(bytes, doc);
+    if (sourceResult === "saved") {
+      doc.dirty = false;
+      renderTabs();
+      return "source";
+    }
+    if (sourceResult === "cancelled" || sourceResult === "failed") return sourceResult;
+    if (doc.sourceFileExpected) return "failed";
 
-  const suggestedName = fileStem(doc.sourceFileName || doc.title || "整理后的文档") + "-已编辑.pdf";
-  const pickerResult = await saveBytesWithPicker(bytes, suggestedName);
-  if (pickerResult === "saved") {
-    doc.dirty = false;
-    renderTabs();
-    return "savedAs";
-  }
-  if (pickerResult === "cancelled" || pickerResult === "failed") return pickerResult;
+    const suggestedName = fileStem(doc.sourceFileName || doc.title || "整理后的文档") + "-已编辑.pdf";
+    const pickerResult = await saveBytesWithPicker(bytes, suggestedName);
+    if (pickerResult === "saved") {
+      doc.dirty = false;
+      renderTabs();
+      return "savedAs";
+    }
+    if (pickerResult === "cancelled" || pickerResult === "failed") return pickerResult;
 
-  downloadBlob(bytes, suggestedName, "application/pdf");
-  return "downloaded";
+    downloadBlob(bytes, suggestedName, "application/pdf");
+    return "downloaded";
+  } finally {
+    hideLoading("保存完成");
+  }
 }
 
 async function saveAsPdf() {
   if (!activeDoc().pages.length) return showToast("请先加入文件。");
-  const bytes = await buildPdfBytes(activeDoc().pages);
-  const suggestedName = fileStem(activeDoc().sourceFileName || activeDoc().title || "整理后的文档") + "-另存为.pdf";
-  const pickerResult = await saveBytesWithPicker(bytes, suggestedName);
-  if (pickerResult === "saved") {
+  showLoading("正在准备另存为…", 2);
+  try {
+    const bytes = await buildPdfBytes(activeDoc().pages, (completed, total) => {
+      updateLoading(`正在整理第 ${completed} / ${total} 页`, 5 + (completed / total) * 82);
+    });
+    const suggestedName = fileStem(activeDoc().sourceFileName || activeDoc().title || "整理后的文档") + "-另存为.pdf";
+    const pickerResult = await saveBytesWithPicker(bytes, suggestedName);
+    if (pickerResult === "saved") {
+      activeDoc().dirty = false;
+      renderTabs();
+      showToast("已另存为 PDF。");
+      return;
+    }
+    if (pickerResult === "cancelled") return;
+    if (pickerResult === "failed") return showToast("另存为失败，请重试。");
+    downloadBlob(bytes, suggestedName, "application/pdf");
     activeDoc().dirty = false;
     renderTabs();
-    showToast("已另存为 PDF。");
-    return;
+    showToast("已下载另存 PDF。");
+  } finally {
+    hideLoading("另存为完成");
   }
-  if (pickerResult === "cancelled") return;
-  if (pickerResult === "failed") return showToast("另存为失败，请重试。");
-  downloadBlob(bytes, suggestedName, "application/pdf");
-  activeDoc().dirty = false;
-  renderTabs();
-  showToast("已下载另存 PDF。");
 }
 
 async function saveBytesWithPicker(bytes, suggestedName) {
@@ -2516,6 +2796,7 @@ async function confirmExport() {
   const scope = state.exportScope;
   const format = els.exportDialog.querySelector('input[name="exportFormat"]:checked')?.value || "pdf";
   const quality = els.exportDialog.querySelector('input[name="exportQuality"]:checked')?.value || "original";
+  const wordMode = els.exportDialog.querySelector('input[name="wordMode"]:checked')?.value || "fidelity";
   const entries = scope === "selected"
     ? selectedPageEntries()
     : activeDoc().pages.map((page, index) => ({ page, index }));
@@ -2525,7 +2806,7 @@ async function confirmExport() {
   els.exportConfirmBtn.textContent = "正在准备…";
   try {
     closeExportDialog();
-    await exportPageEntries(entries, format, scope, quality);
+    await exportPageEntries(entries, format, scope, quality, wordMode);
   } catch (error) {
     console.error("导出失败", error);
     showToast(format === "docx" ? "Word 转换失败，请重试。" : "导出失败，请重试。");
@@ -2535,13 +2816,13 @@ async function confirmExport() {
   }
 }
 
-async function exportPageEntries(entries, format, scope, quality) {
+async function exportPageEntries(entries, format, scope, quality, wordMode = "fidelity") {
   const fileName = suggestedExportFileName(format, entries);
   if (format === "docx") {
     showLoading("正在提取页面文字…", 2);
     let wordFile;
     try {
-      wordFile = await buildWordDocument(entries);
+      wordFile = await buildWordDocument(entries, wordMode);
     } finally {
       hideLoading();
     }
@@ -2623,8 +2904,9 @@ function syncExportFormatControls() {
   const format = els.exportDialog.querySelector('input[name="exportFormat"]:checked')?.value || "pdf";
   const isWord = format === "docx";
   els.exportQualityGroup.classList.toggle("hidden", isWord);
+  els.wordModeGroup.classList.toggle("hidden", !isWord);
   els.exportDialogNote.textContent = isWord
-    ? "转换完全在本机完成，无需联网。可识别文字会转为可编辑内容；扫描页和图片页会原样放入 Word。"
+    ? "默认“保留原版式”会把每页以高清版式放入 Word，间距、字号、颜色和排版最接近原 PDF；“可编辑文字”适合继续修改。"
     : "预估大小会因页面内容有所浮动。下一步可在系统窗口中填写文件名并选择保存位置；多张图片会保存为 ZIP。";
   els.exportConfirmBtn.textContent = isWord ? "转换并保存" : "下一步";
 }
@@ -2752,24 +3034,37 @@ async function exportAllPdf() {
 
 async function printFullPdf() {
   if (!activeDoc().pages.length) return showToast("请先加入文件。");
-  const bytes = await buildPdfBytes(activeDoc().pages);
-  const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-  const frame = document.createElement("iframe");
-  frame.style.position = "fixed";
-  frame.style.right = "0";
-  frame.style.bottom = "0";
-  frame.style.width = "0";
-  frame.style.height = "0";
-  frame.src = blobUrl;
-  document.body.appendChild(frame);
-  frame.onload = () => {
-    frame.contentWindow.focus();
-    frame.contentWindow.print();
-    setTimeout(() => {
-      URL.revokeObjectURL(blobUrl);
-      frame.remove();
-    }, 1200);
-  };
+  showLoading("正在准备打印预览…", 2);
+  try {
+    const bytes = await buildPdfBytes(activeDoc().pages, (completed, total) => {
+      updateLoading(`正在准备第 ${completed} / ${total} 页`, 5 + (completed / total) * 88);
+    });
+    closePrintPreview();
+    printPreviewUrl = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+    els.printPreviewFrame.src = printPreviewUrl;
+    els.printPageSummary.textContent = `${activeDoc().pages.length} 页`;
+    els.printDialog.classList.remove("hidden");
+    els.printConfirmBtn.focus();
+  } catch (error) {
+    console.error(error);
+    showToast("无法生成打印预览，请重试。");
+  } finally {
+    hideLoading("打印预览已准备");
+  }
+}
+
+function printPreviewDocument() {
+  const target = els.printPreviewFrame.contentWindow;
+  if (!target) return showToast("打印预览尚未准备好。");
+  target.focus();
+  target.print();
+}
+
+function closePrintPreview() {
+  els.printDialog.classList.add("hidden");
+  els.printPreviewFrame.removeAttribute("src");
+  if (printPreviewUrl) URL.revokeObjectURL(printPreviewUrl);
+  printPreviewUrl = null;
 }
 
 async function exportSelectedPagePdf() {
@@ -2856,9 +3151,10 @@ async function buildCompressedPdfBytes(pages, quality = "balanced") {
   return out.save({ useObjectStreams: true });
 }
 
-async function buildPdfBytes(pages) {
+async function buildPdfBytes(pages, onProgress = () => {}) {
   const out = await PDFDocument.create();
-  for (const page of pages) {
+  for (let index = 0; index < pages.length; index += 1) {
+    const page = pages[index];
     if (page.type === "pdf") {
       const source = await PDFDocument.load(page.bytes);
       const [copied] = await out.copyPages(source, [page.sourceIndex]);
@@ -2885,6 +3181,8 @@ async function buildPdfBytes(pages) {
       });
       await addAnnotationOverlay(out, pdfPage, page, visualWidth, visualHeight, 0);
     }
+    onProgress(index + 1, pages.length);
+    if (index % 3 === 2) await wait(0);
   }
   return out.save({ useObjectStreams: true });
 }
@@ -3328,6 +3626,14 @@ function updateUi() {
     els.savePdfBtn,
     els.exportBtn,
     els.printBtn,
+    els.menuPrintBtn,
+    els.menuSearchBtn,
+    els.menuZoomOutBtn,
+    els.menuZoomInBtn,
+    els.menuFitBtn,
+    els.menuContinuousBtn,
+    els.menuSingleBtn,
+    els.menuOverviewBtn,
     els.searchInput,
     els.searchBtn,
     els.prevBtn,
@@ -3350,7 +3656,7 @@ function updateUi() {
   });
 }
 
-async function buildWordDocument(entries) {
+async function buildWordDocument(entries, mode = "fidelity") {
   const encoder = new TextEncoder();
   const mediaFiles = [];
   const imageRelationships = [];
@@ -3362,7 +3668,7 @@ async function buildWordDocument(entries) {
     updateLoading(`正在转换第 ${position + 1} / ${entries.length} 页`, 5 + ((position + 1) / entries.length) * 86);
     const textLines = await extractWordTextLines(page);
     const editableCharacters = textLines.reduce((total, line) => total + line.text.replace(/\s/g, "").length, 0);
-    const usePageImage = page.type === "image" || editableCharacters < 8;
+    const usePageImage = mode === "fidelity" || page.type === "image" || editableCharacters < 8;
 
     if (usePageImage) {
       imageId += 1;
@@ -3373,7 +3679,8 @@ async function buildWordDocument(entries) {
       imageRelationships.push(
         `<Relationship Id="${relationshipId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${fileName}"/>`,
       );
-      bodyParts.push(wordImageParagraphXml(relationshipId, image.width, image.height, imageId, index + 1));
+      const hiddenText = mode === "fidelity" ? textLines.map((line) => line.text).join("\n") : "";
+      bodyParts.push(wordImageParagraphXml(relationshipId, image.width, image.height, imageId, index + 1, hiddenText));
     } else {
       const medianSize = median(textLines.map((line) => line.fontSize).filter(Boolean)) || 11;
       textLines.forEach((line) => {
@@ -3578,7 +3885,7 @@ function wordAnnotationParagraphs(page) {
 
 async function renderWordPageImage(page) {
   const dimensions = visualPageDimensions(page);
-  const renderScale = clamp(1600 / Math.max(dimensions.width, dimensions.height), 0.22, 2);
+  const renderScale = clamp(2200 / Math.max(dimensions.width, dimensions.height), 0.35, 2.6);
   const canvas = document.createElement("canvas");
   await renderPageToCanvas(page, canvas, renderScale, { includeAnnotations: true, pixelRatio: 1 });
   const blob = await new Promise((resolve, reject) => {
@@ -3612,7 +3919,7 @@ function wordParagraphXml(text, options = {}) {
   return `<w:p><w:pPr><w:jc w:val="${align}"/><w:spacing w:after="${Math.max(0, Math.round(options.after ?? 80))}" w:line="${Math.max(240, Math.round(fontSize * 25))}" w:lineRule="auto"/></w:pPr>${runs || "<w:r><w:t></w:t></w:r>"}</w:p>`;
 }
 
-function wordImageParagraphXml(relationshipId, width, height, imageId, pageNumber) {
+function wordImageParagraphXml(relationshipId, width, height, imageId, pageNumber, hiddenText = "") {
   const maxWidth = 6.45 * 914400;
   const maxHeight = 9.35 * 914400;
   const scale = Math.min(maxWidth / width, maxHeight / height);
@@ -3632,6 +3939,7 @@ function wordImageParagraphXml(relationshipId, width, height, imageId, pageNumbe
       </pic:pic>
     </a:graphicData></a:graphic>
   </wp:inline></w:drawing></w:r>
+  ${hiddenText ? `<w:r><w:rPr><w:vanish/></w:rPr><w:t xml:space="preserve">${wordXmlEscape(hiddenText)}</w:t></w:r>` : ""}
 </w:p>`;
 }
 
@@ -3780,8 +4088,8 @@ function updateLoading(message, progress) {
   els.loadingProgress.value = value;
 }
 
-function hideLoading() {
-  updateLoading("载入完成", 100);
+function hideLoading(message = "载入完成") {
+  updateLoading(message, 100);
   clearTimeout(loadingHideTimer);
   loadingHideTimer = setTimeout(() => els.loadingBar.classList.add("hidden"), 320);
 }

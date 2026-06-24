@@ -103,6 +103,20 @@ window.pdfStudioRequestSourceFileHandle = async (suggestedName) => {
 };
 
 window.pdfStudioSaveSourceFile = saveNativeSourceFile;
+window.pdfStudioGetRuntimeInfo = () => ipcRenderer.invoke("pdf-studio:runtime-info");
+window.pdfStudioCheckForUpdates = () => ipcRenderer.invoke("pdf-studio:check-update");
+window.pdfStudioDownloadUpdate = () => ipcRenderer.invoke("pdf-studio:download-update");
+window.pdfStudioInstallUpdate = () => ipcRenderer.invoke("pdf-studio:install-update");
+window.pdfStudioUninstallApplication = async () => {
+  const result = await ipcRenderer.invoke("pdf-studio:uninstall");
+  if (!result?.ok) throw new Error(result?.message || "无法启动卸载");
+  return result;
+};
+window.pdfStudioOnUpdateState = (callback) => {
+  const listener = (_event, state) => callback(state || {});
+  ipcRenderer.on("pdf-studio:update-state", listener);
+  return () => ipcRenderer.removeListener("pdf-studio:update-state", listener);
+};
 
 window.pdfStudioClaimOpenFileHandles = async (files) => Promise.all(files.map(async (file) => {
   const filePath = webUtils.getPathForFile(file);

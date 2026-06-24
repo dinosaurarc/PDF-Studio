@@ -166,9 +166,40 @@ button {
   min-width: 0;
 }
 
-.export-menu-wrap {
+.export-menu-wrap,
+.other-menu-wrap {
   position: relative;
   flex: 0 0 auto;
+}
+
+.other-menu {
+  right: 0;
+  left: auto;
+  width: 168px;
+}
+
+.menu-divider {
+  display: block;
+  height: 1px;
+  margin: 4px 5px;
+  background: var(--line);
+}
+
+.danger-menu-item {
+  color: var(--danger) !important;
+}
+
+.desktop-menu-item.hidden,
+.narrow-print-item,
+.narrow-search-item,
+.narrow-zoom-item,
+.narrow-mode-item,
+.narrow-menu-divider {
+  display: none;
+}
+
+.no-desktop-actions .other-menu-wrap {
+  display: none;
 }
 
 .export-menu {
@@ -1008,6 +1039,10 @@ button {
   text-align: center;
 }
 
+.drop-card h2 + .primary-btn {
+  margin-top: 2px;
+}
+
 .drop-card svg {
   width: 34px;
   height: 34px;
@@ -1576,6 +1611,18 @@ button {
   cursor: pointer;
 }
 
+.export-choice-grid span b {
+  font-size: 13px;
+}
+
+.export-choice-grid span small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
 .export-choice-grid input:checked + span {
   border-color: var(--focus);
   background: #eaf1ff;
@@ -1606,6 +1653,86 @@ button {
 .export-dialog-note {
   margin: 14px 0 18px !important;
   font-size: 12px;
+}
+
+.update-dialog-card {
+  width: min(430px, 100%);
+}
+
+.update-version {
+  margin: -6px 0 16px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f5f6f8;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.update-version.hidden,
+.update-progress.hidden,
+.primary-btn.hidden {
+  display: none;
+}
+
+.update-progress {
+  margin: 0 0 18px;
+}
+
+.update-progress > div {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.update-progress progress {
+  display: block;
+  width: 100%;
+  height: 8px;
+  accent-color: var(--accent);
+}
+
+.danger-primary {
+  background: var(--danger);
+}
+
+.print-dialog-card {
+  display: grid;
+  grid-template-rows: auto minmax(240px, 1fr) auto;
+  width: min(920px, calc(100vw - 40px));
+  height: min(760px, calc(100vh - 40px));
+  padding: 16px;
+}
+
+.print-dialog-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 2px 10px;
+}
+
+.print-dialog-head h2 {
+  margin: 0;
+}
+
+.print-dialog-head span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+#printPreviewFrame {
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #e5e7eb;
+}
+
+.print-dialog-card .modal-actions {
+  padding-top: 12px;
 }
 
 .loading-bar {
@@ -1667,6 +1794,33 @@ button {
     display: none;
   }
 
+  .search-box.compact-open {
+    position: fixed;
+    top: 62px;
+    right: 18px;
+    z-index: 30;
+    display: inline-flex;
+    min-width: 210px;
+    padding: 7px;
+    border: 1px solid #c9ccd2;
+    border-radius: 7px;
+    background: white;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  }
+
+  .search-box.compact-open input {
+    flex: 1;
+    width: 132px;
+  }
+
+  .narrow-search-item {
+    display: block;
+  }
+
+  .no-desktop-actions .other-menu-wrap {
+    display: block;
+  }
+
   .brand {
     min-width: 145px;
   }
@@ -1699,5 +1853,30 @@ button {
   #printBtn,
   .toolbar-sep {
     display: none;
+  }
+
+  .narrow-print-item,
+  .narrow-menu-divider {
+    display: block;
+  }
+}
+
+@media (max-width: 900px) {
+  .zoom-slider-control {
+    display: none;
+  }
+
+  .narrow-zoom-item {
+    display: block;
+  }
+}
+
+@media (max-width: 820px) {
+  .segmented {
+    display: none;
+  }
+
+  .narrow-mode-item {
+    display: block;
   }
 }

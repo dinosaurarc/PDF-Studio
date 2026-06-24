@@ -23,34 +23,33 @@ cp "$ROOT/work/web-deploy/_headers" "$STAGE/web/_headers"
 cp "$ROOT/work/web-deploy/README.txt" "$STAGE/web/README.txt"
 touch "$STAGE/web/.nojekyll"
 
-find "$OUTPUTS" -maxdepth 1 -type f \( \
-  -name 'PDF-Studio-*-Web.zip' -o \
-  -name 'PDF-Studio-*-完整发布源码.zip' -o \
-  -name 'PDF-Studio-*-网页与Windows发布源码.zip' -o \
-  -name 'PDF-Studio-*-SHA256SUMS.txt' -o \
-  -name 'PDF大编辑-*-网页与Windows发布说明.txt' \
-\) -delete
+find "$OUTPUTS" -maxdepth 1 -mindepth 1 \( \
+  -name 'PDF-Studio-*' -o \
+  -name 'PDF大编辑-*' \
+\) -exec rm -rf {} +
 
 (cd "$STAGE/web" && /usr/bin/zip -q -r -X "$OUTPUTS/PDF-Studio-${VERSION}-Web.zip" .)
 
-(cd "$ROOT" && /usr/bin/zip -q -r -X "$OUTPUTS/PDF-Studio-${VERSION}-网页与Windows发布源码.zip" \
-  .github .gitignore desktop/electron outputs/pdf-page-studio \
-  work/build-standalone.js work/prepare-online-release.sh work/web-deploy \
+(cd "$ROOT" && /usr/bin/zip -q -r -X "$OUTPUTS/PDF-Studio-${VERSION}-网页与桌面发布源码.zip" \
+  .github .gitignore README.md desktop/electron desktop/macos outputs/pdf-page-studio \
+  work/build-standalone.js work/build-latest-release.sh work/build-distributions.sh \
+  work/check-release-config.js work/prepare-online-release.sh work/set-version.js work/web-deploy \
   发布到网页和Windows软件说明.txt \
   -x 'desktop/electron/app/*' 'desktop/electron/dist/*' 'desktop/electron/node_modules/*' \
+     'desktop/macos/build/*' 'desktop/macos/.module-cache/*' 'desktop/macos/.module-cache-v2/*' \
      '*.DS_Store')
 
-cp "$ROOT/发布到网页和Windows软件说明.txt" "$OUTPUTS/PDF大编辑-${VERSION}-网页与Windows发布说明.txt"
+cp "$ROOT/发布到网页和Windows软件说明.txt" "$OUTPUTS/PDF大编辑-${VERSION}-网页与桌面发布说明.txt"
 
 (
   cd "$OUTPUTS"
   /usr/bin/shasum -a 256 \
     "PDF-Studio-${VERSION}-Web.zip" \
-    "PDF-Studio-${VERSION}-网页与Windows发布源码.zip" \
+    "PDF-Studio-${VERSION}-网页与桌面发布源码.zip" \
     > "PDF-Studio-${VERSION}-SHA256SUMS.txt"
 )
 
 echo "$OUTPUTS/PDF-Studio-${VERSION}-Web.zip"
-echo "$OUTPUTS/PDF-Studio-${VERSION}-网页与Windows发布源码.zip"
+echo "$OUTPUTS/PDF-Studio-${VERSION}-网页与桌面发布源码.zip"
 echo "$OUTPUTS/PDF-Studio-${VERSION}-SHA256SUMS.txt"
-echo "$OUTPUTS/PDF大编辑-${VERSION}-网页与Windows发布说明.txt"
+echo "$OUTPUTS/PDF大编辑-${VERSION}-网页与桌面发布说明.txt"

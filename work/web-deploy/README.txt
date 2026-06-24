@@ -1,4 +1,4 @@
-PDF大编辑 0.2.8 网页发布包
+PDF大编辑 0.3.0 网页发布包
 
 请把压缩包中的全部文件一起上传到 GitHub Pages、Cloudflare Pages、
 Netlify、Vercel 或其他支持 HTTPS 的静态网站托管服务。

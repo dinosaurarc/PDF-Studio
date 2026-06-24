@@ -1,0 +1,12 @@
+PDF大编辑（PDF Studio）旧版 macOS 壳说明
+
+此目录保留 0.2.x 原生 Swift 壳，供兼容和排查历史问题使用。
+
+从 0.3.0 开始，正式 macOS Release 改由 desktop/electron 构建：
+- DMG 用于安装。
+- ZIP 和 latest-mac.yml 用于 electron-updater 自动更新。
+- 用户需要手动安装一次 0.3.0；之后可在“其他 > 检查更新”中更新。
+- 正式自动更新包需要 Apple Developer ID 签名。
+
+正式发布请使用 GitHub Actions：
+.github/workflows/windows-build.yml
