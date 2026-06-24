@@ -58,5 +58,7 @@ jobs:
           name: PDF-Studio-Windows
           path: |
             desktop/electron/dist/*.exe
+            desktop/electron/dist/*.blockmap
+            desktop/electron/dist/latest.yml
             desktop/electron/dist/SHA256SUMS.txt
           if-no-files-found: error
