@@ -1,0 +1,76 @@
+{
+  "name": "pdf-studio-desktop",
+  "version": "0.2.8",
+  "description": "PDF大编辑 / PDF Studio desktop application",
+  "main": "main.cjs",
+  "author": "PDF Studio",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win nsis portable --x64"
+  },
+  "devDependencies": {
+    "electron": "39.0.0",
+    "electron-builder": "26.0.12"
+  },
+  "build": {
+    "appId": "com.pdfstudio.desktop",
+    "productName": "PDF大编辑",
+    "executableName": "PDF Studio",
+    "asar": true,
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "file-store.cjs",
+      "app/**/*",
+      "build/icon.png",
+      "README.txt"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "PDF-Studio-Windows-${version}-${arch}.${ext}"
+    },
+    "fileAssociations": [
+      {
+        "ext": "pdf",
+        "name": "PDF 文档",
+        "description": "使用 PDF大编辑打开 PDF 文档",
+        "mimeType": "application/pdf",
+        "role": "Editor",
+        "icon": "build/icon.ico"
+      }
+    ],
+    "nsis": {
+      "artifactName": "PDF-Studio-Windows-${version}-${arch}-Setup.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PDF大编辑",
+      "uninstallDisplayName": "PDF大编辑",
+      "deleteAppDataOnUninstall": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    },
+    "portable": {
+      "artifactName": "PDF-Studio-Windows-${version}-${arch}-Portable.${ext}"
+    }
+  }
+}

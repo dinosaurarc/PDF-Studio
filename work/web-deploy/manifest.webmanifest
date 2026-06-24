@@ -1,0 +1,23 @@
+{
+  "name": "PDF大编辑",
+  "short_name": "PDF Studio",
+  "description": "在浏览器本机整理、编辑、导出 PDF，并将 PDF 转为 Word。",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eceef1",
+  "theme_color": "#f7f7f8",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
