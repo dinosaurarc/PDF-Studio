@@ -34,6 +34,11 @@ body {
   background: #eceef1;
 }
 
+body.fullscreen-reader {
+  min-width: 0;
+  background: #111318;
+}
+
 button,
 input,
 select {
@@ -62,6 +67,82 @@ button {
 
 .app-shell.thumb-collapsed.side-collapsed {
   grid-template-columns: 0 12px minmax(520px, 1fr) 12px 0;
+}
+
+.fullscreen-reader .app-shell {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 1fr;
+}
+
+.fullscreen-reader .doc-tabs,
+.fullscreen-reader .thumb-rail,
+.fullscreen-reader .side-panel,
+.fullscreen-reader .panel-edge-toggle,
+.fullscreen-reader .page-navigator,
+.fullscreen-reader #selectAllBtn {
+  display: none !important;
+}
+
+.fullscreen-reader .viewer-wrap {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.fullscreen-reader .viewer {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 16px;
+  background: #111318;
+  scroll-behavior: auto;
+}
+
+.fullscreen-reader .topbar {
+  position: fixed;
+  left: 50%;
+  top: 0;
+  z-index: 50;
+  width: min(760px, calc(100vw - 64px));
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -110%);
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+
+.fullscreen-reader.fullscreen-menu-visible .topbar,
+.fullscreen-reader .topbar:hover,
+.fullscreen-reader .topbar:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 8px);
+}
+
+.fullscreen-reader .page-frame {
+  margin: 0;
+}
+
+.fullscreen-reader .page-frame canvas {
+  box-shadow: none;
+}
+
+.fullscreen-reader .page-surface {
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+}
+
+.fullscreen-reader .page-frame.selected .page-surface {
+  outline: 0;
+}
+
+.fullscreen-reader .page-badge {
+  display: none;
 }
 
 .topbar {
@@ -179,6 +260,10 @@ button {
   flex: 0 0 auto;
 }
 
+.other-menu-wrap {
+  display: none;
+}
+
 .other-menu {
   right: 0;
   left: auto;
@@ -198,14 +283,11 @@ button {
 
 .desktop-menu-item.hidden,
 .narrow-print-item,
+.narrow-fullscreen-item,
 .narrow-search-item,
 .narrow-zoom-item,
 .narrow-mode-item,
 .narrow-menu-divider {
-  display: none;
-}
-
-.no-desktop-actions .other-menu-wrap {
   display: none;
 }
 
@@ -240,6 +322,14 @@ button {
 
 .export-menu button:hover {
   background: #f0f1f3;
+}
+
+.page-context-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 158px;
+  z-index: 80;
 }
 
 .icon-btn {
@@ -306,6 +396,11 @@ button {
 .drop-card svg {
   width: 18px;
   height: 18px;
+}
+
+#otherBtn svg {
+  width: 15px;
+  height: 15px;
 }
 
 .search-box {
@@ -802,6 +897,49 @@ button {
   border-style: solid;
 }
 
+.annotation-item.markup-annotation {
+  min-height: 2px;
+  padding: 0;
+  overflow: visible;
+  cursor: default;
+  pointer-events: none;
+}
+
+.annotation-layer.selection-mode .annotation-item.markup-annotation {
+  cursor: move;
+  pointer-events: auto;
+}
+
+.annotation-markup-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: 2px;
+  mix-blend-mode: multiply;
+}
+
+.annotation-item.underline-annotation {
+  align-items: flex-end;
+}
+
+.annotation-underline-line {
+  width: 100%;
+  border-radius: 999px;
+}
+
+.annotation-item.image-annotation {
+  overflow: hidden;
+  background: transparent;
+}
+
+.annotation-image-content {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+  user-select: none;
+}
+
 .annotation-item.circle-annotation {
   border-radius: 50%;
 }
@@ -822,6 +960,25 @@ button {
   border-radius: 2px;
   background: var(--focus);
   cursor: nwse-resize;
+}
+
+.image-annotation .annotation-resize-handle {
+  right: -9px;
+  bottom: -9px;
+  width: 18px;
+  height: 18px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  background: var(--focus);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+}
+
+.image-annotation .annotation-resize-handle::before {
+  position: absolute;
+  inset: 4px;
+  border-right: 2px solid #ffffff;
+  border-bottom: 2px solid #ffffff;
+  content: "";
 }
 
 .annotation-move-handle {
@@ -1136,14 +1293,16 @@ button {
 
 .annotation-tools {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   width: 100%;
   min-width: 0;
-  gap: 3px;
-  overflow: hidden;
+  gap: 6px;
+  overflow: visible;
 }
 
 .edit-tool {
+  flex: 0 0 34px;
   border-color: var(--line);
   background: white;
 }
@@ -1155,7 +1314,7 @@ button {
 }
 
 .annotation-delete {
-  margin-left: auto;
+  margin-left: 0;
   color: var(--danger);
 }
 
@@ -1316,6 +1475,141 @@ button {
   border: 1px solid var(--line);
   border-radius: 5px;
   background: white;
+}
+
+.markup-color-palette {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 7px;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.markup-color-palette.hidden {
+  display: none;
+}
+
+.text-color-popover {
+  position: fixed;
+  z-index: 6000;
+  width: 252px;
+  padding: 7px;
+  border: 1px solid rgba(52, 55, 64, 0.18);
+  border-radius: 8px;
+  background: #f6f6f5;
+  box-shadow: 0 12px 28px rgba(39, 43, 52, 0.22);
+}
+
+.text-color-popover::before {
+  position: absolute;
+  top: -7px;
+  left: var(--popover-arrow-left, 50%);
+  width: 12px;
+  height: 12px;
+  border-left: 1px solid rgba(52, 55, 64, 0.18);
+  border-top: 1px solid rgba(52, 55, 64, 0.18);
+  background: #f6f6f5;
+  transform: rotate(45deg);
+  content: "";
+}
+
+.text-color-popover.hidden {
+  display: none;
+}
+
+.text-color-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 3px;
+}
+
+.text-color-option,
+.text-color-more {
+  position: relative;
+  min-width: 0;
+  border: 1px solid rgba(52, 55, 64, 0.22);
+  border-radius: 2px;
+  background: var(--text-color, #fff);
+}
+
+.text-color-option {
+  height: 19px;
+}
+
+.text-color-option.active {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.no-color-swatch {
+  background: #fff;
+}
+
+.no-color-swatch::after {
+  position: absolute;
+  left: -2px;
+  top: 50%;
+  width: calc(100% + 4px);
+  height: 2px;
+  background: #ff8a80;
+  transform: rotate(-45deg);
+  content: "";
+}
+
+.text-color-more {
+  grid-column: 1 / -1;
+  display: grid;
+  place-items: center;
+  height: 25px;
+  margin-top: 5px;
+  border-radius: 6px;
+  background: #d8d8d8;
+  color: #343740;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.text-custom-color-input {
+  position: fixed;
+  left: -1000px;
+  top: -1000px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.markup-color-option {
+  position: relative;
+  height: 24px;
+  min-width: 0;
+  border: 1px solid rgba(52, 55, 64, 0.2);
+  border-radius: 5px;
+  background: var(--markup-color);
+  overflow: hidden;
+}
+
+.markup-color-option.active {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.markup-color-option.no-color-option {
+  background: #fff;
+}
+
+.markup-color-option.no-color-option::after {
+  position: absolute;
+  left: -3px;
+  top: 50%;
+  width: calc(100% + 6px);
+  height: 2px;
+  background: #ff8a80;
+  transform: rotate(-45deg);
+  content: "";
 }
 
 .drawing-dash-options {
@@ -1708,14 +2002,14 @@ button {
 .print-dialog-card {
   display: grid;
   grid-template-rows: auto minmax(240px, 1fr) auto;
-  width: min(920px, calc(100vw - 40px));
-  height: min(760px, calc(100vh - 40px));
+  width: min(1180px, calc(100vw - 34px));
+  height: min(820px, calc(100vh - 34px));
   padding: 16px;
 }
 
 .print-dialog-head {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
   padding: 0 2px 10px;
@@ -1725,17 +2019,182 @@ button {
   margin: 0;
 }
 
+.print-dialog-head p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .print-dialog-head span {
   color: var(--muted);
   font-size: 12px;
 }
 
+.print-dialog-body {
+  display: grid;
+  grid-template-columns: minmax(270px, 330px) minmax(360px, 1fr);
+  min-height: 0;
+  gap: 14px;
+}
+
+.print-settings {
+  min-width: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.print-settings section {
+  display: grid;
+  gap: 7px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.print-settings b,
+.print-settings label span,
+.print-section-title b {
+  color: #343740;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.print-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.print-section-title button,
+.print-preview-toolbar button {
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: white;
+  color: var(--ink);
+}
+
+.print-settings select,
+.print-settings input[type="text"],
+.print-settings input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: white;
+  color: var(--ink);
+}
+
+.print-two-col {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: end;
+}
+
+.print-two-col label {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.switch-label {
+  display: flex !important;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+}
+
+.switch-label input {
+  flex: 0 0 auto;
+}
+
+.custom-margins {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.custom-margins.hidden,
+#customRangeInput.hidden {
+  display: none;
+}
+
+.custom-margins label {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.custom-margins label span {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.print-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.print-preview-pane {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #eef0f3;
+  overflow: hidden;
+}
+
+.print-preview-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  background: #fbfbfc;
+  font-size: 12px;
+}
+
+.print-preview-toolbar span:not(.toolbar-sep) {
+  min-width: 54px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.print-preview-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
 #printPreviewFrame {
   width: 100%;
   height: 100%;
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  border: 0;
   background: #e5e7eb;
+}
+
+.print-preview-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(245, 246, 248, 0.78);
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.print-preview-loading.hidden {
+  display: none;
 }
 
 .print-dialog-card .modal-actions {
@@ -1797,6 +2256,10 @@ button {
 }
 
 @media (max-width: 1180px) {
+  .other-menu-wrap {
+    display: block;
+  }
+
   .search-box {
     display: none;
   }
@@ -1821,10 +2284,6 @@ button {
   }
 
   .narrow-search-item {
-    display: block;
-  }
-
-  .no-desktop-actions .other-menu-wrap {
     display: block;
   }
 
@@ -1858,13 +2317,25 @@ button {
 
 @media (max-width: 1000px) {
   #printBtn,
+  #fullScreenBtn,
   .toolbar-sep {
     display: none;
   }
 
   .narrow-print-item,
+  .narrow-fullscreen-item,
   .narrow-menu-divider {
     display: block;
+  }
+}
+
+@media (max-width: 980px) {
+  .print-dialog-body {
+    grid-template-columns: 1fr;
+  }
+
+  .print-settings {
+    max-height: 260px;
   }
 }
 
@@ -1913,16 +2384,18 @@ button {
               <button id="exportSelectedMenuBtn" role="menuitem"><span id="exportSelectedMenuLabel">导出选中页</span></button>
             </div>
           </div>
-          <button class="text-btn" id="printBtn" title="打印当前整理后的 PDF">
+          <button class="text-btn" id="printBtn" title="打印">
             <span>打印</span>
           </button>
           <div class="other-menu-wrap">
             <button class="text-btn" id="otherBtn" title="其他功能" aria-haspopup="menu" aria-expanded="false">
-              <span>其他</span>
+              <span>更多</span>
+              <i data-lucide="chevron-down"></i>
             </button>
             <div id="otherMenu" class="export-menu other-menu hidden" role="menu">
               <button id="menuSearchBtn" class="narrow-search-item" role="menuitem">搜索文字</button>
               <button id="menuPrintBtn" class="narrow-print-item" role="menuitem">打印</button>
+              <button id="menuFullScreenBtn" class="narrow-fullscreen-item" role="menuitem">全屏</button>
               <button id="menuZoomOutBtn" class="narrow-zoom-item" role="menuitem">缩小预览</button>
               <button id="menuZoomInBtn" class="narrow-zoom-item" role="menuitem">放大预览</button>
               <button id="menuFitBtn" class="narrow-zoom-item" role="menuitem">适合页面</button>
@@ -1946,7 +2419,7 @@ button {
             <i data-lucide="chevron-up"></i>
           </button>
           <div class="page-counter">
-            <input id="pageNumber" type="number" min="1" value="0" aria-label="页码">
+            <input id="pageNumber" type="text" inputmode="numeric" pattern="[0-9]*" min="1" value="0" aria-label="页码">
             <span>/</span>
             <span id="pageTotal">0</span>
           </div>
@@ -1965,6 +2438,9 @@ button {
             <button id="singleBtn">单页</button>
             <button id="overviewBtn">总览</button>
           </div>
+          <button class="text-btn" id="fullScreenBtn" title="进入全屏模式">
+            <span>全屏</span>
+          </button>
         </div>
       </header>
 
@@ -2014,6 +2490,8 @@ button {
             <button id="addTextBtn" class="icon-btn edit-tool" title="点击页面放置文字" aria-pressed="false"><i data-lucide="type"></i></button>
             <button id="addRectBtn" class="icon-btn edit-tool" title="加入方框"><i data-lucide="square"></i></button>
             <button id="addCircleBtn" class="icon-btn edit-tool" title="加入圆圈"><i data-lucide="circle"></i></button>
+            <button id="highlightTextBtn" class="icon-btn edit-tool" title="给选中文字加高亮" aria-pressed="false"><i data-lucide="highlighter"></i></button>
+            <button id="insertImageBtn" class="icon-btn edit-tool" title="插入图片到当前页"><i data-lucide="image"></i></button>
             <button id="drawBtn" class="icon-btn edit-tool" title="涂鸦或签字" aria-pressed="false"><i data-lucide="pencil"></i></button>
             <button id="lineBtn" class="icon-btn edit-tool" title="拉直线" aria-pressed="false"><i data-lucide="slash"></i></button>
             <button id="deleteAnnotationBtn" class="icon-btn edit-tool annotation-delete hidden" title="删除选中内容"><i data-lucide="trash-2"></i></button>
@@ -2052,6 +2530,9 @@ button {
               <button data-align="center" title="居中"><i data-lucide="align-center"></i></button>
               <button data-align="right" title="右对齐"><i data-lucide="align-right"></i></button>
             </div>
+          </div>
+          <div id="markupEditor" class="annotation-editor hidden">
+            <div id="markupColorPalette" class="markup-color-palette hidden" aria-label="高亮颜色"></div>
           </div>
           <div id="shapeEditor" class="annotation-editor hidden">
             <div class="shape-style-grid">
@@ -2102,6 +2583,18 @@ button {
       </aside>
 
       <input id="fileInput" class="file-input" type="file" accept="application/pdf,image/png,image/jpeg" multiple>
+      <input id="annotationImageInput" class="file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+      <div id="textColorPalette" class="text-color-popover hidden" role="dialog" aria-label="文字颜色">
+        <div id="textColorGrid" class="text-color-grid"></div>
+        <button id="textColorMoreBtn" class="text-color-more" type="button">显示颜色...</button>
+        <input id="textCustomColorInput" class="text-custom-color-input" type="color" value="#202124" aria-label="更多文字颜色">
+      </div>
+      <div id="pageContextMenu" class="export-menu page-context-menu hidden" role="menu">
+        <button id="contextDuplicatePageBtn" role="menuitem">复制此页到剪贴板</button>
+        <button id="contextExportPdfBtn" role="menuitem">导出此页 PDF</button>
+        <button id="contextExportPngBtn" role="menuitem">导出此页 PNG</button>
+        <button id="contextExportJpgBtn" role="menuitem">导出此页 JPG</button>
+      </div>
       <div id="closeDialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="closeDialogTitle">
         <div class="modal-card">
           <h2 id="closeDialogTitle">保存更改？</h2>
@@ -2133,13 +2626,6 @@ button {
               <label><input type="radio" name="exportQuality" value="high"><span><b>高质量</b><small id="qualityEstimateHigh">估算中</small></span></label>
               <label><input type="radio" name="exportQuality" value="balanced"><span><b>均衡</b><small id="qualityEstimateBalanced">估算中</small></span></label>
               <label><input type="radio" name="exportQuality" value="compact"><span><b>小体积</b><small id="qualityEstimateCompact">估算中</small></span></label>
-            </div>
-          </fieldset>
-          <fieldset id="wordModeGroup" class="export-choice-group hidden">
-            <legend>Word 转换方式</legend>
-            <div class="export-choice-grid">
-              <label><input type="radio" name="wordMode" value="fidelity" checked><span><b>保留原版式</b><small>间距、颜色和排版最接近 PDF</small></span></label>
-              <label><input type="radio" name="wordMode" value="editable"><span><b>可编辑文字</b><small>适合继续编辑，复杂排版可能变化</small></span></label>
             </div>
           </fieldset>
           <p id="exportDialogNote" class="export-dialog-note">预估大小会因页面内容有所浮动。下一步可在系统窗口中填写文件名并选择保存位置；多张图片会保存为 ZIP。</p>
@@ -2177,12 +2663,101 @@ button {
       <div id="printDialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="printDialogTitle">
         <div class="modal-card print-dialog-card">
           <div class="print-dialog-head">
-            <h2 id="printDialogTitle">打印预览</h2>
-            <span id="printPageSummary"></span>
+            <div>
+              <h2 id="printDialogTitle">打印中心</h2>
+              <p id="printStatusText">设置完成后直接发送到所选打印机。</p>
+            </div>
+            <span id="printPageSummary">0 页</span>
           </div>
-          <iframe id="printPreviewFrame" title="打印预览"></iframe>
+          <div class="print-dialog-body">
+            <form class="print-settings" id="printSettingsForm">
+              <section>
+                <div class="print-section-title"><b>打印机</b><button id="refreshPrintersBtn" type="button">刷新</button></div>
+                <select id="printerSelect"></select>
+                <p id="printerStatus" class="print-hint">正在读取打印机…</p>
+              </section>
+              <section>
+                <b>页面范围</b>
+                <select id="printRangeSelect">
+                  <option value="all">全部页面</option>
+                  <option value="current">当前页面</option>
+                  <option value="selected">当前选中的页面</option>
+                  <option value="custom">自定义页面</option>
+                </select>
+                <input id="customRangeInput" class="hidden" type="text" placeholder="例如 1-3,6,8-10">
+                <p id="printRangeHint" class="print-hint">预计打印 0 页</p>
+              </section>
+              <section class="print-two-col">
+                <label><span>份数</span><input id="copiesInput" type="number" min="1" max="999" value="1"></label>
+                <label class="switch-label"><input id="collateInput" type="checkbox" checked><span>逐份打印</span></label>
+              </section>
+              <section class="print-two-col">
+                <label><span>纸张</span><select id="paperSelect">
+                  <option value="default">打印机默认</option>
+                  <option value="A4">A4</option>
+                  <option value="A3">A3</option>
+                  <option value="A5">A5</option>
+                  <option value="Letter">Letter</option>
+                  <option value="Legal">Legal</option>
+                  <option value="Tabloid">Tabloid</option>
+                </select></label>
+                <label><span>方向</span><select id="orientationSelect">
+                  <option value="auto">自动匹配</option>
+                  <option value="portrait">纵向</option>
+                  <option value="landscape">横向</option>
+                </select></label>
+              </section>
+              <section class="print-two-col">
+                <label><span>颜色</span><select id="colorSelect"><option value="color">彩色</option><option value="gray">灰度</option></select></label>
+                <label><span>双面</span><select id="duplexSelect"><option value="simplex">单面</option><option value="longEdge">长边翻转</option><option value="shortEdge">短边翻转</option></select></label>
+              </section>
+              <section class="print-two-col">
+                <label><span>缩放</span><select id="scaleSelect">
+                  <option value="fit">适合可打印区域</option>
+                  <option value="actual">实际大小 100%</option>
+                  <option value="shrink">缩小过大页面</option>
+                  <option value="custom">自定义百分比</option>
+                </select></label>
+                <label><span>百分比</span><input id="scalePercentInput" type="number" min="10" max="400" value="100" disabled></label>
+              </section>
+              <section class="print-two-col">
+                <label><span>每张页数</span><select id="pagesPerSheetSelect"><option>1</option><option>2</option><option>4</option><option>6</option><option>9</option><option>16</option></select></label>
+                <label><span>分辨率</span><select id="dpiSelect"><option value="default">默认</option><option value="300">300 DPI</option><option value="600">600 DPI</option></select></label>
+              </section>
+              <section>
+                <b>页边距</b>
+                <select id="marginSelect"><option value="default">默认</option><option value="none">无</option><option value="printable">打印机可打印区域</option><option value="custom">自定义</option></select>
+                <div id="customMargins" class="custom-margins hidden">
+                  <label>上<input id="marginTopInput" type="number" min="0" max="100" value="10"><span>mm</span></label>
+                  <label>右<input id="marginRightInput" type="number" min="0" max="100" value="10"><span>mm</span></label>
+                  <label>下<input id="marginBottomInput" type="number" min="0" max="100" value="10"><span>mm</span></label>
+                  <label>左<input id="marginLeftInput" type="number" min="0" max="100" value="10"><span>mm</span></label>
+                </div>
+              </section>
+              <section>
+                <label class="switch-label"><input id="printBackgroundInput" type="checkbox" checked><span>打印页面背景和背景图片</span></label>
+              </section>
+            </form>
+            <section class="print-preview-pane">
+              <div class="print-preview-toolbar">
+                <button id="previewPrevBtn" type="button">上一页</button>
+                <span id="printPreviewPage">0 / 0</span>
+                <button id="previewNextBtn" type="button">下一页</button>
+                <span class="toolbar-sep"></span>
+                <button id="previewZoomOutBtn" type="button">缩小</button>
+                <button id="previewZoomInBtn" type="button">放大</button>
+                <button id="previewFitBtn" type="button">适合页面</button>
+                <button id="previewWidthBtn" type="button">适合宽度</button>
+              </div>
+              <div class="print-preview-stage">
+                <iframe id="printPreviewFrame" title="打印预览"></iframe>
+                <div id="printPreviewLoading" class="print-preview-loading hidden">正在生成预览…</div>
+              </div>
+            </section>
+          </div>
           <div class="modal-actions">
-            <button id="printCancelBtn" class="wide-btn">关闭</button>
+            <button id="printCancelBtn" class="wide-btn">取消</button>
+            <button id="advancedPrintBtn" class="wide-btn">系统高级打印…</button>
             <button id="printConfirmBtn" class="primary-btn">打印</button>
           </div>
         </div>
@@ -2267,8 +2842,25 @@ const state = {
   brush: { color: "#202124", lineWidth: 3, dash: "solid" },
   lineMode: false,
   lineBrush: { color: "#202124", lineWidth: 3, dash: "solid" },
+  textBrush: { color: "#202124" },
+  markupMode: null,
+  markupBrush: { color: "#fff176", lineWidth: 2, noColor: false },
+  contextPageIndex: -1,
   exportScope: "all",
   update: { status: "idle", currentVersion: "", version: "", portable: false, supported: false },
+  print: {
+    desktop: false,
+    printers: [],
+    preferences: {},
+    previewToken: 0,
+    previewUrl: null,
+    previewPdf: null,
+    previewPage: 1,
+    previewZoom: "fit",
+    submitting: false,
+    settings: null,
+    pageEntries: [],
+  },
   thumbRailCollapsed: false,
   sidePanelCollapsed: false,
   sidePanelWasNarrow: window.innerWidth < 1120,
@@ -2277,10 +2869,15 @@ const state = {
   zooming: false,
   zoomPageId: null,
   zoomCenter: null,
+  nativeFullscreen: false,
+  fullscreenSnapshot: null,
   search: { query: "", total: 0, pageIndexes: [] },
 };
 
+const annotationImageCache = new Map();
+
 const els = {
+  topbar: document.querySelector(".topbar"),
   fileInput: document.querySelector("#fileInput"),
   docTabs: document.querySelector("#docTabs"),
   openBtn: document.querySelector("#openBtn"),
@@ -2294,10 +2891,12 @@ const els = {
   exportSelectedMenuBtn: document.querySelector("#exportSelectedMenuBtn"),
   exportSelectedMenuLabel: document.querySelector("#exportSelectedMenuLabel"),
   printBtn: document.querySelector("#printBtn"),
+  fullScreenBtn: document.querySelector("#fullScreenBtn"),
   otherBtn: document.querySelector("#otherBtn"),
   otherMenu: document.querySelector("#otherMenu"),
   menuSearchBtn: document.querySelector("#menuSearchBtn"),
   menuPrintBtn: document.querySelector("#menuPrintBtn"),
+  menuFullScreenBtn: document.querySelector("#menuFullScreenBtn"),
   menuZoomOutBtn: document.querySelector("#menuZoomOutBtn"),
   menuZoomInBtn: document.querySelector("#menuZoomInBtn"),
   menuFitBtn: document.querySelector("#menuFitBtn"),
@@ -2335,10 +2934,13 @@ const els = {
   addTextBtn: document.querySelector("#addTextBtn"),
   addRectBtn: document.querySelector("#addRectBtn"),
   addCircleBtn: document.querySelector("#addCircleBtn"),
+  highlightTextBtn: document.querySelector("#highlightTextBtn"),
+  insertImageBtn: document.querySelector("#insertImageBtn"),
   drawBtn: document.querySelector("#drawBtn"),
   lineBtn: document.querySelector("#lineBtn"),
   deleteAnnotationBtn: document.querySelector("#deleteAnnotationBtn"),
   textEditor: document.querySelector("#textEditor"),
+  markupEditor: document.querySelector("#markupEditor"),
   shapeEditor: document.querySelector("#shapeEditor"),
   drawingEditor: document.querySelector("#drawingEditor"),
   lineEditor: document.querySelector("#lineEditor"),
@@ -2359,6 +2961,17 @@ const els = {
   lineColorInput: document.querySelector("#lineColorInput"),
   lineWidthInput: document.querySelector("#lineWidthInput"),
   lineDashButtons: [...document.querySelectorAll(".line-dash-btn")],
+  markupColorPalette: document.querySelector("#markupColorPalette"),
+  annotationImageInput: document.querySelector("#annotationImageInput"),
+  textColorPalette: document.querySelector("#textColorPalette"),
+  textColorGrid: document.querySelector("#textColorGrid"),
+  textColorMoreBtn: document.querySelector("#textColorMoreBtn"),
+  textCustomColorInput: document.querySelector("#textCustomColorInput"),
+  pageContextMenu: document.querySelector("#pageContextMenu"),
+  contextDuplicatePageBtn: document.querySelector("#contextDuplicatePageBtn"),
+  contextExportPdfBtn: document.querySelector("#contextExportPdfBtn"),
+  contextExportPngBtn: document.querySelector("#contextExportPngBtn"),
+  contextExportJpgBtn: document.querySelector("#contextExportJpgBtn"),
   metaPages: document.querySelector("#metaPages"),
   metaFiles: document.querySelector("#metaFiles"),
   metaCurrent: document.querySelector("#metaCurrent"),
@@ -2370,7 +2983,6 @@ const els = {
   exportDialog: document.querySelector("#exportDialog"),
   exportRangeSummary: document.querySelector("#exportRangeSummary"),
   exportQualityGroup: document.querySelector("#exportQualityGroup"),
-  wordModeGroup: document.querySelector("#wordModeGroup"),
   exportDialogNote: document.querySelector("#exportDialogNote"),
   qualityEstimateOriginal: document.querySelector("#qualityEstimateOriginal"),
   qualityEstimateHigh: document.querySelector("#qualityEstimateHigh"),
@@ -2390,10 +3002,44 @@ const els = {
   uninstallCancelBtn: document.querySelector("#uninstallCancelBtn"),
   uninstallConfirmBtn: document.querySelector("#uninstallConfirmBtn"),
   printDialog: document.querySelector("#printDialog"),
+  printSettingsForm: document.querySelector("#printSettingsForm"),
+  printerSelect: document.querySelector("#printerSelect"),
+  refreshPrintersBtn: document.querySelector("#refreshPrintersBtn"),
+  printerStatus: document.querySelector("#printerStatus"),
+  printRangeSelect: document.querySelector("#printRangeSelect"),
+  customRangeInput: document.querySelector("#customRangeInput"),
+  printRangeHint: document.querySelector("#printRangeHint"),
+  copiesInput: document.querySelector("#copiesInput"),
+  collateInput: document.querySelector("#collateInput"),
+  paperSelect: document.querySelector("#paperSelect"),
+  orientationSelect: document.querySelector("#orientationSelect"),
+  colorSelect: document.querySelector("#colorSelect"),
+  duplexSelect: document.querySelector("#duplexSelect"),
+  scaleSelect: document.querySelector("#scaleSelect"),
+  scalePercentInput: document.querySelector("#scalePercentInput"),
+  pagesPerSheetSelect: document.querySelector("#pagesPerSheetSelect"),
+  dpiSelect: document.querySelector("#dpiSelect"),
+  marginSelect: document.querySelector("#marginSelect"),
+  customMargins: document.querySelector("#customMargins"),
+  marginTopInput: document.querySelector("#marginTopInput"),
+  marginRightInput: document.querySelector("#marginRightInput"),
+  marginBottomInput: document.querySelector("#marginBottomInput"),
+  marginLeftInput: document.querySelector("#marginLeftInput"),
+  printBackgroundInput: document.querySelector("#printBackgroundInput"),
   printPreviewFrame: document.querySelector("#printPreviewFrame"),
+  printPreviewLoading: document.querySelector("#printPreviewLoading"),
+  printStatusText: document.querySelector("#printStatusText"),
   printPageSummary: document.querySelector("#printPageSummary"),
+  printPreviewPage: document.querySelector("#printPreviewPage"),
+  previewPrevBtn: document.querySelector("#previewPrevBtn"),
+  previewNextBtn: document.querySelector("#previewNextBtn"),
+  previewZoomOutBtn: document.querySelector("#previewZoomOutBtn"),
+  previewZoomInBtn: document.querySelector("#previewZoomInBtn"),
+  previewFitBtn: document.querySelector("#previewFitBtn"),
+  previewWidthBtn: document.querySelector("#previewWidthBtn"),
   printCancelBtn: document.querySelector("#printCancelBtn"),
   printConfirmBtn: document.querySelector("#printConfirmBtn"),
+  advancedPrintBtn: document.querySelector("#advancedPrintBtn"),
   loadingBar: document.querySelector("#loadingBar"),
   loadingText: document.querySelector("#loadingText"),
   loadingPercent: document.querySelector("#loadingPercent"),
@@ -2408,6 +3054,7 @@ let loadingHideTimer;
 let sidePanelRenderTimer;
 let zoomRenderTimer;
 let zoomLiveFrame;
+let markupSelectionTimer;
 let zoomCommitToken = 0;
 let gestureStartScale = null;
 let navigatorUpdateFrame;
@@ -2415,13 +3062,27 @@ let exportEstimateToken = 0;
 let renderToken = 0;
 let pendingCloseChoice = null;
 let printPreviewUrl = null;
+let printPreviewTimer = null;
 const fileHandles = new WeakMap();
 const nativeOpenKeys = new Set();
 const localFontSources = new Map();
 const loadedLocalFonts = new Set();
+const MARKUP_COLORS = ["#fff176", "#ffcc80", "#ffab91", "#f48fb1", "#ce93d8", "#9fa8da", "#90caf9", "#80deea", "#a5d6a7", "#c5e1a5", "#eeeeee"];
+const TEXT_COLORS = [
+  "#ff3b1f", "#ff9500", "#fff200", "#00e90f", "#1debe6", "#153cff", "#e52cff", "#8e248e", "#a77b49", "#ffffff", "#999999", "#000000",
+  "#f5f5f5", "#e6e6e6", "#d6d6d6", "#bdbdbd", "#9e9e9e", "#7d7d7d", "#666666", "#4d4d4d", "#333333", "#1f1f1f",
+  "#00556a", "#083a70", "#1c1554", "#4b145d", "#6d1230", "#7b1e00", "#894100", "#685d00", "#4e6200", "#1f4d0d",
+  "#007d99", "#0051a8", "#33269b", "#72229a", "#a82458", "#b22b00", "#c85d00", "#a98600", "#8fa100", "#4a8a2b",
+  "#009dc0", "#0b78df", "#6342d8", "#b534d1", "#db3d79", "#ed3e20", "#f77200", "#e7ad00", "#d0dc27", "#7cc242",
+  "#18c8ed", "#4397ee", "#7855e9", "#c05adf", "#e85d96", "#ff7357", "#ff9b32", "#ffc04d", "#e6ef65", "#93d265",
+  "#68dced", "#84b6ef", "#aa91ef", "#d892ef", "#f29abd", "#ffaf9e", "#ffc78b", "#ffdd8f", "#f1f69b", "#bae39d",
+  "#a3edf5", "#bdd8f6", "#cfc2f6", "#e5c3f6", "#f7c4d8", "#ffd0c9", "#ffdfc4", "#ffebc3", "#f8facd", "#d8efc7",
+];
 let fileInputMode = "open";
 
 lucide.createIcons();
+renderMarkupColorPalette();
+renderTextColorPalette();
 createDocument("未命名文档");
 bindEvents();
 syncSidePanelForViewport(true);
@@ -2457,10 +3118,16 @@ async function configureDesktopFeatures() {
   try {
     const info = await window.pdfStudioGetRuntimeInfo();
     state.update = { ...state.update, ...(info || {}), supported: Boolean(info?.updateSupported) };
+    state.print.desktop = Boolean(window.pdfStudioGetPrinters && window.pdfStudioPrintPreview && window.pdfStudioPrintDocument);
+    if (state.print.desktop) {
+      if (els.printBtn) els.printBtn.querySelector("span").textContent = "打印";
+      els.menuPrintBtn.textContent = "打印";
+    }
     els.checkUpdateBtn.classList.remove("hidden");
     els.uninstallBtn.classList.remove("hidden");
     if (info?.portable) els.checkUpdateBtn.textContent = "检查更新（免安装版）";
     window.pdfStudioOnUpdateState?.(applyUpdateState);
+    window.pdfStudioOnNativeOpenPaths?.((handles, options) => window.pdfStudioOpenNativeHandles(handles, options));
   } catch (error) {
     console.warn("无法读取桌面版信息", error);
   }
@@ -2477,6 +3144,108 @@ function closeOtherMenu() {
   els.otherMenu.classList.add("hidden");
   els.otherBtn.setAttribute("aria-expanded", "false");
 }
+
+async function toggleFullscreen() {
+  closeOtherMenu();
+  let usedNativeBridge = false;
+  try {
+    if (window.pdfStudioNativeToggleFullscreen) {
+      usedNativeBridge = true;
+      state.nativeFullscreen = !state.nativeFullscreen;
+      syncFullscreenButtons();
+      await window.pdfStudioNativeToggleFullscreen();
+      return;
+    }
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    } else {
+      await document.documentElement.requestFullscreen();
+    }
+  } catch (error) {
+    if (!usedNativeBridge && !document.fullscreenElement) {
+      state.nativeFullscreen = true;
+      syncFullscreenButtons();
+      return;
+    }
+    state.nativeFullscreen = false;
+    syncFullscreenButtons();
+    showToast("当前环境无法进入全屏。");
+  }
+}
+
+function isFullscreenActive() {
+  return Boolean(document.fullscreenElement) || state.nativeFullscreen;
+}
+
+function syncModeControls() {
+  els.continuousBtn.classList.toggle("active", state.mode === "continuous");
+  els.singleBtn.classList.toggle("active", state.mode === "single");
+  els.overviewBtn.classList.toggle("active", state.mode === "overview");
+  els.viewer.classList.toggle("single-mode", state.mode === "single");
+  els.viewer.classList.toggle("overview-mode", state.mode === "overview");
+}
+
+function enterPresentationMode() {
+  if (!activeDoc().pages.length || state.fullscreenSnapshot) return;
+  state.fullscreenSnapshot = {
+    mode: state.mode,
+    scale: state.scale,
+    scrollTop: els.viewer.scrollTop,
+    scrollLeft: els.viewer.scrollLeft,
+  };
+  state.textPlacementMode = false;
+  state.selectionMode = false;
+  state.drawingMode = false;
+  state.lineMode = false;
+  state.selectedAnnotationId = null;
+  state.mode = "single";
+  state.scale = "fit";
+  syncModeControls();
+  renderAll({ keepScroll: false }).then(() => {
+    if (isFullscreenActive() && activeDoc().pages.length) {
+      selectPage(activeDoc().selectedIndex, false, "preserve");
+    }
+  });
+}
+
+function exitPresentationMode() {
+  const snapshot = state.fullscreenSnapshot;
+  if (!snapshot) return;
+  state.fullscreenSnapshot = null;
+  state.mode = snapshot.mode;
+  state.scale = snapshot.scale;
+  syncModeControls();
+  renderAll({ keepScroll: false }).then(() => {
+    if (activeDoc().pages.length) selectPage(activeDoc().selectedIndex, true, "preserve");
+  });
+}
+
+function syncFullscreenButtons() {
+  const active = isFullscreenActive();
+  const label = active ? "退出全屏" : "全屏";
+  document.body.classList.toggle("fullscreen-reader", active);
+  document.body.classList.toggle("fullscreen-menu-visible", false);
+  els.fullScreenBtn.querySelector("span").textContent = label;
+  els.fullScreenBtn.title = active ? "退出全屏模式" : "进入全屏模式";
+  els.menuFullScreenBtn.textContent = label;
+  if (active) enterPresentationMode();
+  else exitPresentationMode();
+  if (!active && state.scale === "fit") scheduleFitRenderAfterPanelChange();
+}
+
+function handleFullscreenMouseMove(event) {
+  if (!isFullscreenActive() || !document.body.classList.contains("fullscreen-reader")) return;
+  if (event.clientY <= 8) {
+    document.body.classList.add("fullscreen-menu-visible");
+  } else if (event.clientY > 78 && !els.topbar?.matches(":hover, :focus-within")) {
+    document.body.classList.remove("fullscreen-menu-visible");
+  }
+}
+
+window.pdfStudioNativeFullscreenChanged = (active) => {
+  state.nativeFullscreen = Boolean(active);
+  syncFullscreenButtons();
+};
 
 function openCompactSearch() {
   closeOtherMenu();
@@ -2676,7 +3445,8 @@ function bindEvents() {
   });
   els.exportAllMenuBtn.addEventListener("click", () => openExportDialog("all"));
   els.exportSelectedMenuBtn.addEventListener("click", () => openExportDialog("selected"));
-  els.printBtn.addEventListener("click", printFullPdf);
+  els.printBtn?.addEventListener("click", printFullPdf);
+  els.fullScreenBtn.addEventListener("click", toggleFullscreen);
   els.otherBtn.addEventListener("click", (event) => {
     event.stopPropagation();
     toggleOtherMenu();
@@ -2685,6 +3455,7 @@ function bindEvents() {
     closeOtherMenu();
     printFullPdf();
   });
+  els.menuFullScreenBtn.addEventListener("click", toggleFullscreen);
   els.menuSearchBtn.addEventListener("click", openCompactSearch);
   els.menuZoomOutBtn.addEventListener("click", () => adjustZoomFromMenu(-10));
   els.menuZoomInBtn.addEventListener("click", () => adjustZoomFromMenu(10));
@@ -2702,7 +3473,19 @@ function bindEvents() {
   els.uninstallCancelBtn.addEventListener("click", closeUninstallDialog);
   els.uninstallConfirmBtn.addEventListener("click", confirmUninstall);
   els.printCancelBtn.addEventListener("click", closePrintPreview);
-  els.printConfirmBtn.addEventListener("click", printPreviewDocument);
+  els.printConfirmBtn.addEventListener("click", submitPrintJob);
+  els.advancedPrintBtn.addEventListener("click", submitAdvancedPrintJob);
+  els.refreshPrintersBtn.addEventListener("click", refreshPrinters);
+  els.printSettingsForm.addEventListener("input", handlePrintSettingsChange);
+  els.printSettingsForm.addEventListener("change", handlePrintSettingsChange);
+  els.previewPrevBtn.addEventListener("click", () => movePrintPreviewPage(-1));
+  els.previewNextBtn.addEventListener("click", () => movePrintPreviewPage(1));
+  els.previewZoomOutBtn.addEventListener("click", () => setPrintPreviewZoom(-0.1));
+  els.previewZoomInBtn.addEventListener("click", () => setPrintPreviewZoom(0.1));
+  els.previewFitBtn.addEventListener("click", () => setPrintPreviewMode("fit"));
+  els.previewWidthBtn.addEventListener("click", () => setPrintPreviewMode("width"));
+  document.addEventListener("fullscreenchange", syncFullscreenButtons);
+  document.addEventListener("mousemove", handleFullscreenMouseMove);
   els.searchBtn.addEventListener("click", searchText);
   els.searchInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") searchText();
@@ -2731,14 +3514,14 @@ function bindEvents() {
   els.exportDialog.addEventListener("click", (event) => {
     if (event.target === els.exportDialog) closeExportDialog();
   });
-  els.prevBtn.addEventListener("click", () => selectPage(Math.max(0, activeDoc().selectedIndex - 1), true));
-  els.nextBtn.addEventListener("click", () => selectPage(Math.min(activeDoc().pages.length - 1, activeDoc().selectedIndex + 1), true));
+  els.prevBtn.addEventListener("click", () => selectPage(Math.max(0, activeDoc().selectedIndex - 1), !isFullscreenActive()));
+  els.nextBtn.addEventListener("click", () => selectPage(Math.min(activeDoc().pages.length - 1, activeDoc().selectedIndex + 1), !isFullscreenActive()));
   els.zoomSlider.addEventListener("input", handleZoomSliderInput);
   els.zoomSlider.addEventListener("change", commitZoomRender);
   els.resetZoomBtn.addEventListener("click", resetZoomToFit);
   els.pageNumber.addEventListener("change", () => {
     const index = Number(els.pageNumber.value) - 1;
-    selectPage(clamp(index, 0, activeDoc().pages.length - 1), true);
+    selectPage(clamp(index, 0, activeDoc().pages.length - 1), !isFullscreenActive());
   });
   els.continuousBtn.addEventListener("click", () => setMode("continuous"));
   els.singleBtn.addEventListener("click", () => setMode("single"));
@@ -2748,16 +3531,32 @@ function bindEvents() {
   els.addTextBtn.addEventListener("click", toggleTextPlacementMode);
   els.addRectBtn.addEventListener("click", () => addAnnotation("rect"));
   els.addCircleBtn.addEventListener("click", () => addAnnotation("circle"));
+  els.highlightTextBtn.addEventListener("pointerdown", (event) => event.preventDefault());
+  els.highlightTextBtn.addEventListener("click", activateTextMarkupMode);
+  els.insertImageBtn.addEventListener("click", insertImageAnnotation);
+  els.annotationImageInput.addEventListener("change", handleAnnotationImageInput);
   els.drawBtn.addEventListener("click", toggleDrawingMode);
   els.lineBtn.addEventListener("click", toggleLineMode);
   els.selectToolBtn.addEventListener("click", toggleSelectionMode);
   els.deleteAnnotationBtn.addEventListener("click", deleteSelectedAnnotation);
+  els.contextDuplicatePageBtn.addEventListener("click", copyContextPageToClipboard);
+  els.contextExportPdfBtn.addEventListener("click", () => exportContextPage("pdf"));
+  els.contextExportPngBtn.addEventListener("click", () => exportContextPage("png"));
+  els.contextExportJpgBtn.addEventListener("click", () => exportContextPage("jpeg"));
   els.loadLocalFontsBtn.addEventListener("click", loadLocalFonts);
   bindAnnotationControls();
   document.addEventListener("click", (event) => {
     if (!event.target.closest(".export-menu-wrap")) closeExportMenu();
     if (!event.target.closest(".other-menu-wrap")) closeOtherMenu();
+    if (!event.target.closest("#pageContextMenu")) closePageContextMenu();
+    if (!event.target.closest("#textColorPalette") && !event.target.closest(".color-control")) closeTextColorPalette();
+    if (!event.target.closest("#markupEditor") && state.markupMode !== "highlight") closeMarkupColorPalette();
   });
+  document.addEventListener("scroll", () => {
+    closePageContextMenu();
+    positionTextColorPalette();
+  }, true);
+  document.addEventListener("selectionchange", scheduleSelectionMarkup);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !els.exportMenu.classList.contains("hidden")) {
       event.preventDefault();
@@ -2772,6 +3571,11 @@ function bindEvents() {
     if (event.key === "Escape" && !els.otherMenu.classList.contains("hidden")) {
       event.preventDefault();
       closeOtherMenu();
+      return;
+    }
+    if (event.key === "Escape" && !els.pageContextMenu.classList.contains("hidden")) {
+      event.preventDefault();
+      closePageContextMenu();
       return;
     }
     if (event.key === "Escape" && !els.updateDialog.classList.contains("hidden")) {
@@ -2794,7 +3598,12 @@ function bindEvents() {
       resolveCloseChoice("cancel");
       return;
     }
-    if (event.key === "Escape" && (state.textPlacementMode || state.selectionMode || state.drawingMode || state.lineMode) && !isTypingTarget(event.target)) {
+    if (event.key === "Escape" && isFullscreenActive() && !isModalOpen()) {
+      event.preventDefault();
+      toggleFullscreen();
+      return;
+    }
+    if (event.key === "Escape" && (state.textPlacementMode || state.selectionMode || state.drawingMode || state.lineMode || state.markupMode) && !isTypingTarget(event.target)) {
       event.preventDefault();
       setEditingMode(null);
       return;
@@ -2809,7 +3618,12 @@ function bindEvents() {
       selectAllPages(true);
       return;
     }
-    if (isDeleteKey(event) && !isTypingTarget(event.target)) {
+    if (!event.metaKey && !event.ctrlKey && !event.altKey && isPageStepKey(event) && !isTypingTarget(event.target) && !isModalOpen()) {
+      event.preventDefault();
+      stepSelectedPage(pageStepDeltaForEvent(event));
+      return;
+    }
+    if (isDeleteKey(event) && canHandleDeleteKey(event.target)) {
       event.preventDefault();
       if (selectedAnnotation()) deleteSelectedAnnotation();
       else deleteSelected();
@@ -2817,6 +3631,7 @@ function bindEvents() {
   }, true);
 
   window.addEventListener("beforeunload", (event) => {
+    if (window.__pdfStudioAllowUnload) return;
     if (!state.documents.some((doc) => doc.dirty)) return;
     event.preventDefault();
     event.returnValue = "";
@@ -2834,6 +3649,11 @@ function bindEvents() {
   els.viewer.addEventListener("gestureend", handleGestureEnd, { passive: false });
   window.addEventListener("resize", debounce(() => {
     const panelChanged = syncSidePanelForViewport();
+    positionTextColorPalette();
+    if (isFullscreenActive()) {
+      renderAll({ keepScroll: false });
+      return;
+    }
     if (state.scale === "fit" && !panelChanged) renderAll({ keepScroll: true });
     schedulePageNavigatorUpdate();
   }, 160));
@@ -2953,15 +3773,21 @@ function releaseNativeOpenKey(handle) {
 
 window.pdfStudioBeforeAppClose = async () => {
   if (pendingCloseChoice) return false;
+  window.__pdfStudioAllowUnload = false;
   const dirtyDocuments = state.documents.filter((doc) => doc.dirty);
   for (const doc of dirtyDocuments) {
     const choice = await askCloseDirty(doc);
     if (choice === "cancel") return false;
+    if (choice === "discard") {
+      state.documents.forEach((item) => { item.dirty = false; });
+      break;
+    }
     if (choice === "save") {
       const result = await saveDocument(doc);
       if (result === "cancelled" || result === "failed") return false;
     }
   }
+  window.__pdfStudioAllowUnload = true;
   return true;
 };
 
@@ -3042,9 +3868,10 @@ async function undoLast() {
 }
 
 async function openFiles() {
-  if (window.showOpenFilePicker) {
+  const picker = window.pdfStudioShowOpenFilePicker || window.showOpenFilePicker;
+  if (picker) {
     try {
-      const handles = await window.showOpenFilePicker({
+      const handles = await picker({
         multiple: true,
         types: [
           {
@@ -3247,6 +4074,7 @@ function renderThumb(index, container = els.thumbList) {
     <div class="thumb-label"><span>${index + 1}</span><span title="${escapeHtml(page.title)}">${escapeHtml(shortName(page.title))}</span></div>
   `;
   item.addEventListener("click", () => selectPage(Number(item.dataset.index), true, "replace"));
+  item.addEventListener("contextmenu", (event) => openPageContextMenu(event, Number(item.dataset.index)));
   item.addEventListener("dragstart", (event) => {
     state.draggingPageId = page.id;
     state.dragPreview = null;
@@ -3297,6 +4125,7 @@ async function renderViewerPage(index, token, container = els.viewer) {
     activeDoc().selectedIndex = currentIndex;
     setMode("continuous", { focusIndex: currentIndex });
   });
+  frame.addEventListener("contextmenu", (event) => openPageContextMenu(event, Number(frame.dataset.index)));
   frame.addEventListener("dragstart", (event) => {
     if (state.mode === "single") return;
     state.draggingPageId = page.id;
@@ -3396,6 +4225,10 @@ async function renderTextLayer(page, container, scale) {
   }
 }
 
+function isMarkupAnnotation(annotation) {
+  return annotation?.type === "highlight" || annotation?.type === "underline";
+}
+
 function renderAnnotationLayer(page, container, scale) {
   container.replaceChildren();
   container.onpointerdown = null;
@@ -3409,8 +4242,14 @@ function renderAnnotationLayer(page, container, scale) {
       return;
     }
     const item = document.createElement("div");
-    item.className = `annotation-item ${annotation.type === "text" ? "text-annotation" : "shape-annotation"}`;
+    const itemClass = annotation.type === "text"
+      ? "text-annotation"
+      : isMarkupAnnotation(annotation) ? "markup-annotation"
+        : annotation.type === "image" ? "image-annotation" : "shape-annotation";
+    item.className = `annotation-item ${itemClass}`;
     if (annotation.type === "circle") item.classList.add("circle-annotation");
+    if (annotation.type === "highlight") item.classList.add("highlight-annotation");
+    if (annotation.type === "underline") item.classList.add("underline-annotation");
     item.classList.toggle("selected", annotation.id === state.selectedAnnotationId);
     item.dataset.annotationId = annotation.id;
     item.style.left = `${annotation.x * 100}%`;
@@ -3437,6 +4276,26 @@ function renderAnnotationLayer(page, container, scale) {
       textContent.style.justifyContent = annotation.align === "left" ? "flex-start" : annotation.align === "right" ? "flex-end" : "center";
       bindInlineTextEditing(textContent, annotation, page);
       item.appendChild(textContent);
+    } else if (annotation.type === "highlight") {
+      const fill = document.createElement("span");
+      fill.className = "annotation-markup-fill";
+      fill.style.backgroundColor = annotation.color || "#fff176";
+      fill.style.opacity = annotation.noColor ? "0" : "0.42";
+      item.appendChild(fill);
+    } else if (annotation.type === "underline") {
+      const line = document.createElement("span");
+      line.className = "annotation-underline-line";
+      line.style.height = `${Math.max(1, annotation.lineWidth * scale)}px`;
+      line.style.backgroundColor = annotation.color || "#fff176";
+      item.appendChild(line);
+    } else if (annotation.type === "image") {
+      const image = document.createElement("img");
+      image.className = "annotation-image-content";
+      image.alt = "插入的图片";
+      image.draggable = false;
+      image.src = annotation.dataUrl;
+      loadAnnotationImage(annotation).catch(() => {});
+      item.appendChild(image);
     } else {
       item.style.background = annotation.fillEnabled ? annotation.fillColor : "transparent";
       item.style.borderColor = annotation.borderColor;
@@ -3651,7 +4510,8 @@ function bindAnnotationPointerEvents(item, annotation, layer, resizeHandle, move
     const pageIndex = Number(item.closest(".page-frame")?.dataset.index);
     if (Number.isInteger(pageIndex)) selectPage(pageIndex, false, "preserve");
     selectAnnotation(annotation.id);
-    if (!state.selectionMode && !movingFromHandle) return;
+    const canDragDirectly = annotation.type === "image";
+    if (!state.selectionMode && !movingFromHandle && !canDragDirectly) return;
     const rect = layer.getBoundingClientRect();
     const startX = event.clientX;
     const startY = event.clientY;
@@ -3684,7 +4544,7 @@ function bindAnnotationPointerEvents(item, annotation, layer, resizeHandle, move
   });
 
   resizeHandle.addEventListener("pointerdown", (event) => {
-    if (!state.selectionMode && annotation.type !== "text") return;
+    if (!state.selectionMode && annotation.type !== "text" && annotation.type !== "image") return;
     event.preventDefault();
     event.stopPropagation();
     selectAnnotation(annotation.id);
@@ -3704,10 +4564,14 @@ function bindAnnotationPointerEvents(item, annotation, layer, resizeHandle, move
         changed = true;
       }
       if (!changed) return;
-      annotation.width = clamp(originalWidth + dx, 0.04, 1 - annotation.x);
-      annotation.height = annotation.type === "circle"
-        ? clamp(annotation.width * rect.width / rect.height, 0.025, 1 - annotation.y)
-        : clamp(originalHeight + dy, 0.025, 1 - annotation.y);
+      if (annotation.type === "image" && !moveEvent.shiftKey) {
+        resizeImageProportionally(annotation, originalWidth, originalHeight, dx, dy, rect);
+      } else {
+        annotation.width = clamp(originalWidth + dx, 0.04, 1 - annotation.x);
+        annotation.height = annotation.type === "circle"
+          ? clamp(annotation.width * rect.width / rect.height, 0.025, 1 - annotation.y)
+          : clamp(originalHeight + dy, 0.025, 1 - annotation.y);
+      }
       item.style.width = `${annotation.width * 100}%`;
       item.style.height = `${annotation.height * 100}%`;
       if (annotation.type === "text") {
@@ -3795,6 +4659,7 @@ async function addAnnotation(type) {
   state.selectionMode = false;
   state.drawingMode = false;
   state.lineMode = false;
+  state.markupMode = null;
   if (state.mode === "overview") {
     state.mode = "continuous";
     els.continuousBtn.classList.add("active");
@@ -3830,9 +4695,10 @@ async function toggleTextPlacementMode() {
 
 function placeTextAnnotation(page, x, y) {
   recordUndo("加入文字");
+  const textColor = normalizeColorForInput(state.textBrush.color, "#202124");
   const annotation = {
     id: makeId(), type: "text", text: "新文字", x, y, width: 0.38, height: 0.085,
-    fontFamily: "Source Han Sans CN", fontSize: 24, color: "#202124", bold: false, italic: false,
+    fontFamily: "Source Han Sans CN", fontSize: 24, color: textColor, bold: false, italic: false,
     underline: false, align: "left",
   };
   page.annotations ||= [];
@@ -3843,6 +4709,289 @@ function placeTextAnnotation(page, x, y) {
   syncEditingLayerModes();
   updateAnnotationControls();
   focusInlineTextEditor(annotation.id, true);
+}
+
+async function activateTextMarkupMode() {
+  if (!currentPage()) return showToast("请先打开文件并选中一页。");
+  setTextMarkupModeActive();
+  syncEditingLayerModes();
+  updateAnnotationControls();
+  if (hasPdfTextSelection()) {
+    await applyTextMarkup("highlight");
+  } else {
+    showToast("请用鼠标选中文字，选中后会自动高亮。");
+  }
+}
+
+function setTextMarkupModeActive() {
+  const previous = selectedAnnotationEntry();
+  state.markupMode = "highlight";
+  state.textPlacementMode = false;
+  state.selectionMode = false;
+  state.drawingMode = false;
+  state.lineMode = false;
+  state.selectedAnnotationId = null;
+  closeTextColorPalette();
+  if (previous) refreshAnnotationLayerForPage(previous.pageIndex);
+  openMarkupColorPalette();
+}
+
+function scheduleSelectionMarkup() {
+  clearTimeout(markupSelectionTimer);
+  if (state.markupMode !== "highlight" || !hasPdfTextSelection()) return;
+  markupSelectionTimer = setTimeout(() => {
+    applyTextMarkup("highlight", { silent: true }).catch((error) => console.error(error));
+  }, 220);
+}
+
+function hasPdfTextSelection() {
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed || !selection.rangeCount) return false;
+  for (let rangeIndex = 0; rangeIndex < selection.rangeCount; rangeIndex += 1) {
+    if (rangeTouchesPdfTextLayer(selection.getRangeAt(rangeIndex))) return true;
+  }
+  return false;
+}
+
+function rangeTouchesPdfTextLayer(range) {
+  const start = elementForNode(range.startContainer);
+  const end = elementForNode(range.endContainer);
+  return Boolean(start?.closest(".text-layer") && end?.closest(".text-layer"));
+}
+
+function elementForNode(node) {
+  if (!node) return null;
+  return node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+}
+
+async function applyTextMarkup(type, options = {}) {
+  if (!currentPage()) return showToast("请先打开文件并选中一页。");
+  type = "highlight";
+  if (state.mode === "overview") {
+    state.mode = "continuous";
+    els.continuousBtn.classList.add("active");
+    els.overviewBtn.classList.remove("active");
+    await renderAll({ keepScroll: true });
+  }
+  setTextMarkupModeActive();
+
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed || !selection.rangeCount) {
+    syncEditingLayerModes();
+    updateAnnotationControls();
+    if (!options.silent) showToast("请先用鼠标选中页面里的文字。");
+    return false;
+  }
+
+  const frames = [...document.querySelectorAll(".page-frame[data-index]")];
+  const rectsByPage = new Map();
+  for (let rangeIndex = 0; rangeIndex < selection.rangeCount; rangeIndex += 1) {
+    const range = selection.getRangeAt(rangeIndex);
+    if (!rangeTouchesPdfTextLayer(range)) continue;
+    [...range.getClientRects()].forEach((selectionRect) => {
+      if (selectionRect.width < 2 || selectionRect.height < 2) return;
+      const match = pageFrameForSelectionRect(frames, selectionRect);
+      if (!match) return;
+      const { pageIndex, layerRect } = match;
+      const normalized = normalizeSelectionRect(selectionRect, layerRect);
+      if (!normalized || normalized.width < 0.003 || normalized.height < 0.003) return;
+      if (!rectsByPage.has(pageIndex)) rectsByPage.set(pageIndex, []);
+      rectsByPage.get(pageIndex).push(normalized);
+    });
+  }
+
+  const entries = [...rectsByPage.entries()]
+    .map(([pageIndex, rects]) => [pageIndex, mergeMarkupRects(rects)])
+    .filter(([, rects]) => rects.length);
+  if (!entries.length) {
+    syncEditingLayerModes();
+    updateAnnotationControls();
+    if (!options.silent) showToast("没有识别到可标注的文字区域。");
+    return false;
+  }
+
+  let changed = false;
+  recordUndo(state.markupBrush.noColor ? "清除高亮" : "添加高亮");
+  entries.forEach(([pageIndex, rects]) => {
+    const page = activeDoc().pages[pageIndex];
+    if (!page) return;
+    page.annotations ||= [];
+    const toRemove = new Set();
+    rects.forEach((rect) => {
+      const overlaps = page.annotations.filter((annotation) => (
+        annotation.type === "highlight" && markupRectsOverlap(annotation, rect)
+      ));
+      if (overlaps.length) {
+        changed = true;
+        overlaps.forEach((annotation) => {
+          if (state.markupBrush.noColor) {
+            toRemove.add(annotation.id);
+          } else {
+            annotation.color = state.markupBrush.color;
+            annotation.lineWidth = state.markupBrush.lineWidth;
+            annotation.noColor = false;
+          }
+        });
+        return;
+      }
+      if (state.markupBrush.noColor) return;
+      const annotation = {
+        id: makeId(),
+        type,
+        ...rect,
+        color: state.markupBrush.color,
+        lineWidth: state.markupBrush.lineWidth,
+        noColor: false,
+      };
+      page.annotations.push(annotation);
+      changed = true;
+    });
+    if (toRemove.size) page.annotations = page.annotations.filter((annotation) => !toRemove.has(annotation.id));
+  });
+  if (!changed) {
+    const snapshot = activeDoc().undoStack.pop();
+    if (snapshot) activeDoc().dirty = snapshot.dirty;
+    renderTabs();
+    selection.removeAllRanges();
+    updateAnnotationControls();
+    if (state.markupBrush.noColor && !options.silent) showToast("这段文字没有可清除的高亮。");
+    return false;
+  }
+
+  const firstPageIndex = entries[0][0];
+  activeDoc().selectedIndex = firstPageIndex;
+  activeDoc().selectedPageIds = [activeDoc().pages[firstPageIndex].id];
+  activeDoc().selectionAnchorIndex = firstPageIndex;
+  state.selectedAnnotationId = null;
+  selection.removeAllRanges();
+  await renderAll({ keepScroll: true });
+  updateAnnotationControls();
+  return true;
+}
+
+function markupRectsOverlap(a, b) {
+  const left = Math.max(a.x, b.x);
+  const top = Math.max(a.y, b.y);
+  const right = Math.min(a.x + a.width, b.x + b.width);
+  const bottom = Math.min(a.y + a.height, b.y + b.height);
+  const width = Math.max(0, right - left);
+  const height = Math.max(0, bottom - top);
+  const area = width * height;
+  if (!area) return false;
+  const smaller = Math.max(0.000001, Math.min(a.width * a.height, b.width * b.height));
+  return area / smaller >= 0.2;
+}
+
+function pageFrameForSelectionRect(frames, selectionRect) {
+  let best = null;
+  let bestArea = 0;
+  frames.forEach((frame) => {
+    const layer = frame.querySelector(".annotation-layer");
+    if (!layer) return;
+    const layerRect = layer.getBoundingClientRect();
+    const overlapWidth = Math.max(0, Math.min(selectionRect.right, layerRect.right) - Math.max(selectionRect.left, layerRect.left));
+    const overlapHeight = Math.max(0, Math.min(selectionRect.bottom, layerRect.bottom) - Math.max(selectionRect.top, layerRect.top));
+    const area = overlapWidth * overlapHeight;
+    if (area > bestArea) {
+      bestArea = area;
+      best = { pageIndex: Number(frame.dataset.index), layerRect };
+    }
+  });
+  return bestArea > 1 ? best : null;
+}
+
+function normalizeSelectionRect(selectionRect, layerRect) {
+  if (!layerRect.width || !layerRect.height) return null;
+  const expandY = Math.max(0, (state.markupBrush.lineWidth || 2) - 2) / layerRect.height;
+  const left = clamp((Math.max(selectionRect.left, layerRect.left) - layerRect.left) / layerRect.width, 0, 1);
+  const top = clamp((Math.max(selectionRect.top, layerRect.top) - layerRect.top) / layerRect.height - expandY / 2, 0, 1);
+  const right = clamp((Math.min(selectionRect.right, layerRect.right) - layerRect.left) / layerRect.width, 0, 1);
+  const bottom = clamp((Math.min(selectionRect.bottom, layerRect.bottom) - layerRect.top) / layerRect.height + expandY / 2, 0, 1);
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+function mergeMarkupRects(rects) {
+  const sorted = rects
+    .filter((rect) => rect.width > 0 && rect.height > 0)
+    .sort((a, b) => Math.abs(a.y - b.y) > 0.004 ? a.y - b.y : a.x - b.x);
+  const merged = [];
+  sorted.forEach((rect) => {
+    const current = merged[merged.length - 1];
+    const sameLine = current && Math.abs(rect.y - current.y) <= Math.max(rect.height, current.height) * 0.65;
+    const closeEnough = current && rect.x <= current.x + current.width + 0.02;
+    if (sameLine && closeEnough) {
+      const left = Math.min(current.x, rect.x);
+      const top = Math.min(current.y, rect.y);
+      const right = Math.max(current.x + current.width, rect.x + rect.width);
+      const bottom = Math.max(current.y + current.height, rect.y + rect.height);
+      current.x = left;
+      current.y = top;
+      current.width = right - left;
+      current.height = bottom - top;
+    } else {
+      merged.push({ ...rect });
+    }
+  });
+  return merged.map((rect) => ({
+    x: clamp(rect.x, 0, 0.995),
+    y: clamp(rect.y, 0, 0.995),
+    width: clamp(rect.width, 0.003, 1 - rect.x),
+    height: clamp(rect.height, 0.003, 1 - rect.y),
+  }));
+}
+
+async function insertImageAnnotation() {
+  if (!currentPage()) return showToast("请先选中一页。");
+  if (state.mode === "overview") {
+    state.mode = "continuous";
+    els.continuousBtn.classList.add("active");
+    els.overviewBtn.classList.remove("active");
+    await renderAll({ keepScroll: true });
+  }
+  els.annotationImageInput.value = "";
+  els.annotationImageInput.click();
+}
+
+async function handleAnnotationImageInput(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  if (!file.type.startsWith("image/")) return showToast("请选择 PNG、JPG 等图片文件。");
+  const page = currentPage();
+  if (!page) return;
+  try {
+    const dataUrl = await readFileAsDataUrl(file);
+    const image = await loadAnnotationImage({ dataUrl });
+    const aspectRatio = Math.max(0.001, (image.naturalWidth || 1) / (image.naturalHeight || 1));
+    const { width, height } = fitImageAnnotationSize(page, aspectRatio);
+    recordUndo("插入图片");
+    const annotation = {
+      id: makeId(),
+      type: "image",
+      x: clamp(0.5 - width / 2, 0, 1 - width),
+      y: clamp(0.5 - height / 2, 0, 1 - height),
+      width,
+      height,
+      dataUrl,
+      mime: file.type || "image/png",
+      naturalWidth: image.naturalWidth || 0,
+      naturalHeight: image.naturalHeight || 0,
+      aspectRatio,
+    };
+    page.annotations ||= [];
+    page.annotations.push(annotation);
+    state.textPlacementMode = false;
+    state.drawingMode = false;
+    state.lineMode = false;
+    state.markupMode = null;
+    state.selectionMode = true;
+    state.selectedAnnotationId = annotation.id;
+    refreshCurrentAnnotationLayer();
+    syncEditingLayerModes();
+    updateAnnotationControls();
+  } catch (error) {
+    showToast("插入图片失败，请换一张图片再试。");
+  }
 }
 
 async function toggleDrawingMode() {
@@ -3878,6 +5027,9 @@ function setEditingMode(mode) {
   state.selectionMode = mode === "select";
   state.drawingMode = mode === "draw";
   state.lineMode = mode === "line";
+  state.markupMode = null;
+  closeMarkupColorPalette();
+  closeTextColorPalette();
   if (mode) state.selectedAnnotationId = null;
   refreshCurrentAnnotationLayer();
   syncEditingLayerModes();
@@ -3902,14 +5054,25 @@ function syncEditingLayerModes() {
 }
 
 function selectedAnnotation() {
+  return selectedAnnotationEntry()?.annotation || null;
+}
+
+function selectedAnnotationEntry() {
   if (!state.selectedAnnotationId) return null;
-  return currentPage()?.annotations?.find((annotation) => annotation.id === state.selectedAnnotationId) || null;
+  const doc = activeDoc();
+  for (let pageIndex = 0; pageIndex < doc.pages.length; pageIndex += 1) {
+    const page = doc.pages[pageIndex];
+    const annotation = page.annotations?.find((item) => item.id === state.selectedAnnotationId);
+    if (annotation) return { page, pageIndex, annotation };
+  }
+  return null;
 }
 
 function selectAnnotation(id) {
   state.textPlacementMode = false;
   state.drawingMode = false;
   state.lineMode = false;
+  state.markupMode = null;
   state.selectedAnnotationId = id;
   syncEditingLayerModes();
   refreshAnnotationSelection();
@@ -3923,26 +5086,30 @@ function refreshAnnotationSelection() {
 }
 
 function refreshCurrentAnnotationLayer() {
-  const page = currentPage();
-  const frame = document.querySelector(`.page-frame[data-index="${activeDoc().selectedIndex}"]`);
+  refreshAnnotationLayerForPage(activeDoc().selectedIndex);
+}
+
+function refreshAnnotationLayerForPage(pageIndex) {
+  const page = activeDoc().pages[pageIndex];
+  const frame = document.querySelector(`.page-frame[data-index="${pageIndex}"]`);
   const layer = frame?.querySelector(".annotation-layer");
   if (page && layer) renderAnnotationLayer(page, layer, getRenderScale(page));
 }
 
 function deleteSelectedAnnotation() {
-  const annotation = selectedAnnotation();
-  if (!annotation) return;
+  const entry = selectedAnnotationEntry();
+  if (!entry) return;
   recordUndo("删除页面内容");
-  currentPage().annotations = currentPage().annotations.filter((item) => item.id !== annotation.id);
+  entry.page.annotations = entry.page.annotations.filter((item) => item.id !== entry.annotation.id);
   state.selectedAnnotationId = null;
-  refreshCurrentAnnotationLayer();
+  refreshAnnotationLayerForPage(entry.pageIndex);
   updateAnnotationControls();
 }
 
 function bindAnnotationControls() {
   bindAnnotationInput(els.fontFamilySelect, "fontFamily", (value) => value, "修改字体");
   bindAnnotationInput(els.fontSizeInput, "fontSize", (value) => clamp(Number(value) || 24, 6, 180), "修改字号");
-  bindAnnotationInput(els.textColorInput, "color", (value) => value, "修改文字颜色");
+  bindTextColorInput();
   bindAnnotationInput(els.shapeFillInput, "fillColor", (value) => value, "修改填充颜色");
   bindAnnotationInput(els.shapeBorderInput, "borderColor", (value) => value, "修改边框颜色");
   bindAnnotationInput(els.shapeBorderWidthInput, "borderWidth", (value) => clamp(Number(value) || 0, 0, 30), "修改边框粗细");
@@ -3989,6 +5156,122 @@ function bindAnnotationControls() {
   });
   els.fontFamilySelect.addEventListener("change", () => loadLocalFontFace(els.fontFamilySelect.value));
 }
+
+function renderTextColorPalette() {
+  els.textColorGrid.replaceChildren();
+  const defaultButton = createTextColorButton("#202124", "默认文字颜色", true);
+  els.textColorGrid.appendChild(defaultButton);
+  TEXT_COLORS.forEach((color) => {
+    const button = createTextColorButton(color, `文字颜色 ${color}`);
+    els.textColorGrid.appendChild(button);
+  });
+  els.textCustomColorInput.addEventListener("input", () => applyTextColor(els.textCustomColorInput.value));
+  els.textCustomColorInput.addEventListener("change", () => applyTextColor(els.textCustomColorInput.value));
+  els.textColorMoreBtn.addEventListener("click", openTextSystemColorPanel);
+}
+
+function createTextColorButton(color, label, isDefault = false) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `text-color-option${isDefault ? " no-color-swatch" : ""}`;
+  button.title = label;
+  button.dataset.color = color.toLowerCase();
+  button.style.setProperty("--text-color", isDefault ? "#fff" : color);
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    applyTextColor(color);
+  });
+  return button;
+}
+
+function bindTextColorInput() {
+  const open = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!selectedAnnotation() || selectedAnnotation().type !== "text") return;
+    openTextColorPalette();
+  };
+  els.textColorInput.addEventListener("pointerdown", open);
+  els.textColorInput.addEventListener("click", open);
+  els.textColorInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") open(event);
+  });
+}
+
+function openTextColorPalette() {
+  syncTextColorPalette(els.textColorInput.value || "#202124");
+  els.textCustomColorInput.value = normalizeColorForInput(els.textColorInput.value, "#202124");
+  els.textColorPalette.classList.remove("hidden");
+  positionTextColorPalette();
+  requestAnimationFrame(positionTextColorPalette);
+}
+
+function closeTextColorPalette() {
+  els.textColorPalette.classList.add("hidden");
+}
+
+function positionTextColorPalette() {
+  if (els.textColorPalette.classList.contains("hidden")) return;
+  const anchor = els.textColorInput.closest(".color-control") || els.textColorInput;
+  const rect = anchor.getBoundingClientRect();
+  const popover = els.textColorPalette;
+  const width = popover.offsetWidth || 252;
+  const height = popover.offsetHeight || 214;
+  const center = rect.left + rect.width / 2;
+  let left = clamp(center - width / 2, 8, window.innerWidth - width - 8);
+  let top = rect.bottom + 8;
+  if (top + height > window.innerHeight - 8) top = rect.top - height - 8;
+  top = clamp(top, 8, Math.max(8, window.innerHeight - height - 8));
+  const arrowLeft = clamp(center - left - 6, 12, width - 24);
+  popover.style.left = `${left}px`;
+  popover.style.top = `${top}px`;
+  popover.style.setProperty("--popover-arrow-left", `${arrowLeft}px`);
+}
+
+function syncTextColorPalette(color) {
+  const value = normalizeColorForInput(color, "#202124").toLowerCase();
+  els.textColorGrid.querySelectorAll(".text-color-option").forEach((button) => {
+    button.classList.toggle("active", button.dataset.color === value);
+  });
+}
+
+async function openTextSystemColorPanel(event) {
+  event?.preventDefault();
+  event?.stopPropagation();
+  const value = normalizeColorForInput(els.textColorInput.value || state.textBrush.color, "#202124");
+  els.textCustomColorInput.value = value;
+  if (window.pdfStudioOpenTextColorPanel) {
+    closeTextColorPalette();
+    try {
+      await window.pdfStudioOpenTextColorPanel(value);
+    } catch (error) {
+      showToast("无法打开系统颜色面板。");
+    }
+    return;
+  }
+  els.textCustomColorInput.style.pointerEvents = "auto";
+  els.textCustomColorInput.click();
+  requestAnimationFrame(() => {
+    els.textCustomColorInput.style.pointerEvents = "none";
+  });
+}
+
+function applyTextColor(color) {
+  const value = normalizeColorForInput(color, "#202124");
+  state.textBrush.color = value;
+  els.textColorInput.value = value;
+  els.textCustomColorInput.value = value;
+  syncTextColorPalette(value);
+  const annotation = selectedAnnotation();
+  if (!annotation || annotation.type !== "text" || annotation.color === value) return;
+  recordUndo("修改文字颜色");
+  annotation.color = value;
+  refreshCurrentAnnotationLayer();
+  updateAnnotationControls();
+}
+
+window.pdfStudioReceivePickedTextColor = (color) => applyTextColor(color);
 
 function bindAnnotationInput(input, field, transform, label) {
   let editRecorded = false;
@@ -4045,14 +5328,162 @@ function bindLineInput(input, field, transform, label) {
   input.addEventListener("blur", () => { editRecorded = false; });
 }
 
+function renderMarkupColorPalette() {
+  els.markupColorPalette.replaceChildren();
+  MARKUP_COLORS.forEach((color) => {
+    const button = createColorOptionButton(color, "高亮颜色", () => applyMarkupColor(color));
+    els.markupColorPalette.appendChild(button);
+  });
+  els.markupColorPalette.appendChild(createNoColorOptionButton());
+  syncMarkupColorControl(state.markupBrush.color, state.markupBrush.noColor);
+}
+
+function createColorOptionButton(color, label, onSelect) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "markup-color-option";
+  button.title = color;
+  button.setAttribute("aria-label", `${label} ${color}`);
+  button.dataset.color = color;
+  button.style.setProperty("--markup-color", color);
+  button.addEventListener("click", async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    await onSelect();
+  });
+  return button;
+}
+
+function createNoColorOptionButton() {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "markup-color-option no-color-option";
+  button.title = "无色";
+  button.setAttribute("aria-label", "无色");
+  button.dataset.noColor = "true";
+  button.addEventListener("click", async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    await applyMarkupNoColor();
+  });
+  return button;
+}
+
+function normalizeColorForInput(color, fallback) {
+  return normalizeHexColor(color, fallback);
+}
+
+function normalizeHexColor(color, fallback) {
+  if (/^#[0-9a-f]{6}$/i.test(color || "")) return color.toLowerCase();
+  if (/^#[0-9a-f]{3}$/i.test(color || "")) {
+    return `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}`.toLowerCase();
+  }
+  return fallback;
+}
+
+function toggleMarkupColorPalette(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  if (state.markupMode === "highlight") {
+    openMarkupColorPalette();
+    return;
+  }
+  const opening = els.markupColorPalette.classList.contains("hidden");
+  els.markupColorPalette.classList.toggle("hidden", !opening);
+  if (opening) syncMarkupColorControl(state.markupBrush.color, state.markupBrush.noColor);
+}
+
+function openMarkupColorPalette() {
+  els.markupColorPalette.classList.remove("hidden");
+  syncMarkupColorControl(state.markupBrush.color, state.markupBrush.noColor);
+}
+
+function closeMarkupColorPalette() {
+  els.markupColorPalette.classList.add("hidden");
+}
+
+function syncMarkupColorControl(color, noColor = state.markupBrush.noColor) {
+  const value = normalizeColorForInput(color, "#fff176");
+  els.markupColorPalette.querySelectorAll(".markup-color-option").forEach((button) => {
+    if (button.dataset.noColor === "true") {
+      button.classList.toggle("active", Boolean(noColor));
+      return;
+    }
+    button.classList.toggle("active", !noColor && button.dataset.color.toLowerCase() === value.toLowerCase());
+  });
+}
+
+async function applyMarkupColor(color) {
+  state.markupBrush.color = color;
+  state.markupBrush.noColor = false;
+  const annotation = selectedAnnotation();
+  if (annotation?.type === "highlight") {
+    recordUndo("修改标注颜色");
+    annotation.color = color;
+    annotation.noColor = false;
+    refreshCurrentAnnotationLayer();
+  }
+  syncMarkupColorControl(color, false);
+  updateAnnotationControls();
+  if (state.markupMode === "highlight" && hasPdfTextSelection()) {
+    await applyTextMarkup("highlight", { silent: true });
+  }
+}
+
+function bindMarkupInput(input, field, transform, label) {
+  let editRecorded = false;
+  const apply = () => {
+    const value = transform(input.value, input);
+    state.markupBrush[field] = value;
+    if (field === "color") state.markupBrush.noColor = false;
+    const annotation = selectedAnnotation();
+    if (!isMarkupAnnotation(annotation)) return;
+    if (!editRecorded) {
+      recordUndo(label);
+      editRecorded = true;
+    }
+    annotation[field] = value;
+    if (field === "color") annotation.noColor = false;
+    refreshCurrentAnnotationLayer();
+    updateAnnotationControls();
+  };
+  input.addEventListener("input", apply);
+  input.addEventListener("change", apply);
+  input.addEventListener("blur", () => { editRecorded = false; });
+}
+
+async function applyMarkupNoColor() {
+  state.markupBrush.noColor = true;
+  syncMarkupColorControl(state.markupBrush.color, true);
+  const annotation = selectedAnnotation();
+  if (annotation?.type === "highlight") {
+    recordUndo("清除高亮");
+    const page = currentPage();
+    page.annotations = (page.annotations || []).filter((item) => item.id !== annotation.id);
+    state.selectedAnnotationId = null;
+    refreshCurrentAnnotationLayer();
+    updateAnnotationControls();
+    showToast("已清除这处高亮。");
+    return;
+  }
+  updateAnnotationControls();
+  if (hasPdfTextSelection()) {
+    await applyTextMarkup("highlight");
+  } else {
+    showToast("已选择无色。选中已有高亮文字后，可清除高亮。");
+  }
+}
+
 function updateAnnotationControls() {
   const annotation = selectedAnnotation();
   const isText = annotation?.type === "text";
   const isShape = annotation?.type === "rect" || annotation?.type === "circle";
   const isDrawing = annotation?.type === "draw";
   const isLine = annotation?.type === "line";
+  const isMarkup = isMarkupAnnotation(annotation);
   els.deleteAnnotationBtn.classList.toggle("hidden", !annotation);
   els.textEditor.classList.toggle("hidden", !isText);
+  els.markupEditor.classList.toggle("hidden", !state.markupMode && !isMarkup);
   els.shapeEditor.classList.toggle("hidden", !isShape);
   els.drawingEditor.classList.toggle("hidden", !state.drawingMode && !isDrawing);
   els.lineEditor.classList.toggle("hidden", !state.lineMode && !isLine);
@@ -4064,6 +5495,8 @@ function updateAnnotationControls() {
   els.drawBtn.setAttribute("aria-pressed", String(state.drawingMode));
   els.lineBtn.classList.toggle("active", state.lineMode);
   els.lineBtn.setAttribute("aria-pressed", String(state.lineMode));
+  els.highlightTextBtn.classList.toggle("active", state.markupMode === "highlight" || annotation?.type === "highlight");
+  els.highlightTextBtn.setAttribute("aria-pressed", String(state.markupMode === "highlight" || annotation?.type === "highlight"));
   if (state.drawingMode || isDrawing) {
     const source = isDrawing ? annotation : state.brush;
     els.drawColorInput.value = source.color;
@@ -4075,12 +5508,18 @@ function updateAnnotationControls() {
     els.lineWidthInput.value = source.lineWidth;
     els.lineDashButtons.forEach((button) => button.classList.toggle("active", button.dataset.dash === source.dash));
   }
+  if (state.markupMode || isMarkup) {
+    const source = isMarkup ? annotation : state.markupBrush;
+    syncMarkupColorControl(source.color || state.markupBrush.color || "#fff176", Boolean(source.noColor));
+  }
   if (!annotation) return;
   if (isText) {
     ensureFontOption(annotation.fontFamily);
     els.fontFamilySelect.value = annotation.fontFamily;
     els.fontSizeInput.value = annotation.fontSize;
     els.textColorInput.value = annotation.color;
+    state.textBrush.color = normalizeColorForInput(annotation.color, state.textBrush.color);
+    syncTextColorPalette(annotation.color);
     els.boldBtn.classList.toggle("active", annotation.bold);
     els.italicBtn.classList.toggle("active", annotation.italic);
     els.underlineBtn.classList.toggle("active", annotation.underline);
@@ -4090,6 +5529,9 @@ function updateAnnotationControls() {
     els.shapeBorderInput.value = annotation.borderColor;
     els.shapeFillEnabled.checked = annotation.fillEnabled;
     els.shapeBorderWidthInput.value = annotation.borderWidth;
+  } else if (isMarkup) {
+    state.markupBrush.color = annotation.color || state.markupBrush.color;
+    state.markupBrush.noColor = Boolean(annotation.noColor);
   }
 }
 
@@ -4144,6 +5586,12 @@ function getRenderScale(page) {
     const pageWidth = rotated ? page.height : page.width;
     const pageHeight = rotated ? page.width : page.height;
     return Math.min(0.34, 190 / pageWidth, 136 / pageHeight);
+  }
+  if (isFullscreenActive()) {
+    const dimensions = visualPageDimensions(page);
+    const availableWidth = Math.max(120, window.innerWidth - 32);
+    const availableHeight = Math.max(120, window.innerHeight - 32);
+    return clamp(Math.min(availableWidth / dimensions.width, availableHeight / dimensions.height), 0.03, 4);
   }
   if (state.scale !== "fit") return state.scale;
   const rotated = Math.abs(page.rotation % 180) === 90;
@@ -4519,6 +5967,10 @@ function bindPageNavigator() {
 }
 
 function setMode(mode, options = {}) {
+  if (isFullscreenActive() && mode !== "single") {
+    showToast("放映模式会保持单页完整显示。");
+    return;
+  }
   const previousMode = state.mode;
   const focusIndex = Number.isInteger(options.focusIndex)
     ? options.focusIndex
@@ -4534,11 +5986,7 @@ function setMode(mode, options = {}) {
     updateAnnotationControls();
   }
   state.mode = mode;
-  els.continuousBtn.classList.toggle("active", mode === "continuous");
-  els.singleBtn.classList.toggle("active", mode === "single");
-  els.overviewBtn.classList.toggle("active", mode === "overview");
-  els.viewer.classList.toggle("single-mode", mode === "single");
-  els.viewer.classList.toggle("overview-mode", mode === "overview");
+  syncModeControls();
   renderAll({ keepScroll: true }).then(() => {
     if (Number.isInteger(focusIndex)) selectPage(focusIndex, true, "preserve");
   });
@@ -4582,12 +6030,7 @@ function scheduleFitRenderAfterPanelChange() {
 }
 
 function syncSidePanelForViewport(initial = false) {
-  const narrow = window.innerWidth < 1120;
-  if (initial || narrow !== state.sidePanelWasNarrow) {
-    state.sidePanelWasNarrow = narrow;
-    setSidePanelCollapsed(narrow);
-    return true;
-  }
+  state.sidePanelWasNarrow = window.innerWidth < 1120;
   return false;
 }
 
@@ -4636,6 +6079,106 @@ function duplicateSelected() {
 
 function makeId() {
   return crypto.randomUUID ? crypto.randomUUID() : `page-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("读取图片失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadAnnotationImage(annotation) {
+  if (!annotation?.dataUrl) return Promise.reject(new Error("图片内容为空"));
+  const cached = annotationImageCache.get(annotation.dataUrl);
+  if (cached?.image?.complete && cached.image.naturalWidth) return Promise.resolve(cached.image);
+  if (cached?.promise) return cached.promise;
+  const image = new Image();
+  image.decoding = "async";
+  const promise = new Promise((resolve, reject) => {
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("图片载入失败"));
+  });
+  annotationImageCache.set(annotation.dataUrl, { image, promise });
+  image.src = annotation.dataUrl;
+  return promise;
+}
+
+function cachedAnnotationImage(annotation) {
+  const cached = annotationImageCache.get(annotation?.dataUrl);
+  return cached?.image?.complete && cached.image.naturalWidth ? cached.image : null;
+}
+
+function fitImageAnnotationSize(page, imageAspect, preferredWidth = 0.34) {
+  const dimensions = visualPageDimensions(page);
+  const pageRatio = Math.max(0.001, dimensions.width / Math.max(1, dimensions.height));
+  const aspect = Math.max(0.001, imageAspect || 1);
+  const maxWidth = 0.56;
+  const maxHeight = 0.56;
+  const minWidth = 0.08;
+  const minHeight = 0.04;
+  let width = Math.min(preferredWidth, maxWidth);
+  let height = width * pageRatio / aspect;
+  if (height > maxHeight) {
+    height = maxHeight;
+    width = height * aspect / pageRatio;
+  }
+  if (width > maxWidth) {
+    width = maxWidth;
+    height = width * pageRatio / aspect;
+  }
+  if (width < minWidth && minWidth * pageRatio / aspect <= maxHeight) {
+    width = minWidth;
+    height = width * pageRatio / aspect;
+  }
+  if (height < minHeight && minHeight * aspect / pageRatio <= maxWidth) {
+    height = minHeight;
+    width = height * aspect / pageRatio;
+  }
+  return {
+    width: clamp(width, 0.02, maxWidth),
+    height: clamp(height, 0.02, maxHeight),
+  };
+}
+
+function imageAnnotationAspect(annotation, layerRect) {
+  if (annotation.aspectRatio) return Math.max(0.001, annotation.aspectRatio);
+  if (annotation.naturalWidth && annotation.naturalHeight) {
+    return Math.max(0.001, annotation.naturalWidth / annotation.naturalHeight);
+  }
+  return Math.max(0.001, (annotation.width * layerRect.width) / Math.max(1, annotation.height * layerRect.height));
+}
+
+function resizeImageProportionally(annotation, originalWidth, originalHeight, dx, dy, layerRect) {
+  const imageAspect = imageAnnotationAspect(annotation, layerRect);
+  const pageRatio = Math.max(0.001, layerRect.width / Math.max(1, layerRect.height));
+  const maxWidth = Math.max(0.02, 1 - annotation.x);
+  const maxHeight = Math.max(0.02, 1 - annotation.y);
+  const minWidth = 0.04;
+  const minHeight = 0.025;
+  const byWidth = Math.abs(dx * layerRect.width) >= Math.abs(dy * layerRect.height);
+  let width = byWidth ? originalWidth + dx : (originalHeight + dy) * imageAspect / pageRatio;
+  let height = width * pageRatio / imageAspect;
+  if (height > maxHeight) {
+    height = maxHeight;
+    width = height * imageAspect / pageRatio;
+  }
+  if (width > maxWidth) {
+    width = maxWidth;
+    height = width * pageRatio / imageAspect;
+  }
+  if (width < minWidth && minWidth * pageRatio / imageAspect <= maxHeight) {
+    width = minWidth;
+    height = width * pageRatio / imageAspect;
+  }
+  if (height < minHeight && minHeight * imageAspect / pageRatio <= maxWidth) {
+    height = minHeight;
+    width = height * imageAspect / pageRatio;
+  }
+  annotation.width = clamp(width, minWidth, maxWidth);
+  annotation.height = clamp(height, minHeight, maxHeight);
 }
 
 function clonePage(page) {
@@ -4827,7 +6370,24 @@ function isPageDrag(event) {
 function isTypingTarget(target) {
   if (!target) return false;
   const tag = target.tagName;
-  return target.isContentEditable || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+  return target.isContentEditable || isFormControlTarget(target);
+}
+
+function isFormControlTarget(target) {
+  if (!target) return false;
+  const tag = target.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+}
+
+function isEditingTextAnnotationTarget(target) {
+  const editor = target?.closest?.(".annotation-text-content");
+  return Boolean(editor && editor.isContentEditable && document.activeElement === editor);
+}
+
+function canHandleDeleteKey(target) {
+  if (!selectedAnnotation()) return !isTypingTarget(target);
+  if (isFormControlTarget(target) || isEditingTextAnnotationTarget(target)) return false;
+  return true;
 }
 
 function isDeleteKey(event) {
@@ -4838,6 +6398,37 @@ function isDeleteKey(event) {
     || event.code === "Backspace"
     || event.keyCode === 46
     || event.keyCode === 8;
+}
+
+function isPageStepKey(event) {
+  return event.key === "ArrowUp"
+    || event.key === "ArrowDown"
+    || event.key === "ArrowLeft"
+    || event.key === "ArrowRight"
+    || event.key === "PageUp"
+    || event.key === "PageDown"
+    || (isFullscreenActive() && (event.key === " " || event.key === "Enter"));
+}
+
+function pageStepDeltaForEvent(event) {
+  return event.key === "ArrowUp" || event.key === "ArrowLeft" || event.key === "PageUp" ? -1 : 1;
+}
+
+function isModalOpen() {
+  return [
+    els.closeDialog,
+    els.exportDialog,
+    els.updateDialog,
+    els.uninstallDialog,
+    els.printDialog,
+  ].some((element) => element && !element.classList.contains("hidden"));
+}
+
+function stepSelectedPage(delta) {
+  const doc = activeDoc();
+  if (!doc.pages.length) return;
+  const nextIndex = clamp(doc.selectedIndex + delta, 0, doc.pages.length - 1);
+  selectPage(nextIndex, !isFullscreenActive(), "replace");
 }
 
 function isAcceptedFile(file) {
@@ -4918,9 +6509,10 @@ async function saveAsPdf() {
 }
 
 async function saveBytesWithPicker(bytes, suggestedName) {
-  if (!window.showSaveFilePicker) return "unsupported";
+  const picker = window.pdfStudioShowSaveFilePicker || window.showSaveFilePicker;
+  if (!picker) return "unsupported";
   try {
-    const handle = await window.showSaveFilePicker({
+    const handle = await picker({
       suggestedName,
       types: [{ description: "PDF", accept: { "application/pdf": [".pdf"] } }],
     });
@@ -5006,6 +6598,7 @@ function toggleExportMenu() {
   els.exportMenu.classList.toggle("hidden", !opening);
   els.exportBtn.setAttribute("aria-expanded", String(opening));
   if (opening) {
+    closeOtherMenu();
     const count = selectedPageEntries().length;
     els.exportSelectedMenuLabel.textContent = `导出选中页（${count}）`;
   }
@@ -5014,6 +6607,84 @@ function toggleExportMenu() {
 function closeExportMenu() {
   els.exportMenu.classList.add("hidden");
   els.exportBtn.setAttribute("aria-expanded", "false");
+}
+
+function openPageContextMenu(event, pageIndex) {
+  if (!activeDoc().pages[pageIndex]) return;
+  event.preventDefault();
+  event.stopPropagation();
+  closeExportMenu();
+  closeOtherMenu();
+  state.contextPageIndex = pageIndex;
+  selectPage(pageIndex, false, "replace");
+  const menu = els.pageContextMenu;
+  menu.classList.remove("hidden");
+  const rect = menu.getBoundingClientRect();
+  const left = clamp(event.clientX, 8, window.innerWidth - rect.width - 8);
+  const top = clamp(event.clientY, 8, window.innerHeight - rect.height - 8);
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+}
+
+function closePageContextMenu() {
+  els.pageContextMenu.classList.add("hidden");
+  state.contextPageIndex = -1;
+}
+
+function contextPageEntry() {
+  const index = state.contextPageIndex;
+  const page = activeDoc().pages[index];
+  return page ? { page, index } : null;
+}
+
+async function copyContextPageToClipboard() {
+  const entry = contextPageEntry();
+  closePageContextMenu();
+  if (!entry) return;
+  showLoading("正在复制页面…", 30);
+  try {
+    const blob = await pageImageBlob(entry.page, "png", "original");
+    await copyImageBlobToClipboard(blob);
+    showToast("已复制此页图片到剪贴板。");
+  } catch (error) {
+    showToast(error?.message || "复制到剪贴板失败。");
+  } finally {
+    hideLoading();
+  }
+}
+
+async function copyImageBlobToClipboard(blob) {
+  if (navigator.clipboard?.write && window.ClipboardItem) {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      return;
+    } catch (error) {
+      // Desktop wrappers and file:// pages may deny the web clipboard; try native fallback below.
+    }
+  }
+  if (window.pdfStudioNativeCopyImageToClipboard) {
+    const dataUrl = await blobToDataUrl(blob);
+    const result = await window.pdfStudioNativeCopyImageToClipboard(dataUrl);
+    if (result?.ok) return;
+    throw new Error(result?.message || "系统剪贴板拒绝了这张图片。");
+  }
+  throw new Error("当前环境不支持复制图片到剪贴板。");
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("读取页面图片失败。"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function exportContextPage(format) {
+  const entry = contextPageEntry();
+  closePageContextMenu();
+  if (!entry) return;
+  await exportPageEntries([entry], format, "selected", "original");
 }
 
 function openExportDialog(scope) {
@@ -5036,7 +6707,6 @@ async function confirmExport() {
   const scope = state.exportScope;
   const format = els.exportDialog.querySelector('input[name="exportFormat"]:checked')?.value || "pdf";
   const quality = els.exportDialog.querySelector('input[name="exportQuality"]:checked')?.value || "original";
-  const wordMode = els.exportDialog.querySelector('input[name="wordMode"]:checked')?.value || "fidelity";
   const entries = scope === "selected"
     ? selectedPageEntries()
     : activeDoc().pages.map((page, index) => ({ page, index }));
@@ -5046,7 +6716,7 @@ async function confirmExport() {
   els.exportConfirmBtn.textContent = "正在准备…";
   try {
     closeExportDialog();
-    await exportPageEntries(entries, format, scope, quality, wordMode);
+    await exportPageEntries(entries, format, scope, quality);
   } catch (error) {
     console.error("导出失败", error);
     showToast(format === "docx" ? "Word 转换失败，请重试。" : "导出失败，请重试。");
@@ -5056,13 +6726,13 @@ async function confirmExport() {
   }
 }
 
-async function exportPageEntries(entries, format, scope, quality, wordMode = "fidelity") {
+async function exportPageEntries(entries, format, scope, quality) {
   const fileName = suggestedExportFileName(format, entries);
   if (format === "docx") {
-    showLoading("正在提取页面文字…", 2);
+    showLoading("正在生成可编辑 Word…", 2);
     let wordFile;
     try {
-      wordFile = await buildWordDocument(entries, wordMode);
+      wordFile = await buildWordDocument(entries);
     } finally {
       hideLoading();
     }
@@ -5072,43 +6742,66 @@ async function exportPageEntries(entries, format, scope, quality, wordMode = "fi
   }
 
   if (format === "pdf") {
-    const pages = entries.map(({ page }) => page);
-    const bytes = quality === "original" ? await buildPdfBytes(pages) : await buildCompressedPdfBytes(pages, quality);
-    const result = await saveExportData(bytes, fileName, "application/pdf", ".pdf", "PDF 文档");
-    if (result === "saved") showToast("PDF 已导出。");
-    return result;
+    showLoading("正在导出 PDF…", 2);
+    try {
+      const pages = entries.map(({ page }) => page);
+      const bytes = quality === "original"
+        ? await buildPdfBytes(pages, (completed, total) => updateLoading(`正在整理第 ${completed} / ${total} 页`, 5 + (completed / total) * 82))
+        : await buildCompressedPdfBytes(pages, quality, (completed, total) => updateLoading(`正在压缩第 ${completed} / ${total} 页`, 5 + (completed / total) * 82));
+      updateLoading("正在打开保存窗口…", 92);
+      const result = await saveExportData(bytes, fileName, "application/pdf", ".pdf", "PDF 文档");
+      if (result === "saved") showToast("PDF 已导出。");
+      return result;
+    } finally {
+      hideLoading("PDF 导出完成");
+    }
   }
 
   const ext = format === "jpeg" ? "jpg" : "png";
   const mime = format === "jpeg" ? "image/jpeg" : "image/png";
+  showLoading(`正在导出 ${ext.toUpperCase()}…`, 2);
   if (entries.length === 1) {
-    const blob = await pageImageBlob(entries[0].page, format, quality);
-    const result = await saveExportData(blob, fileName, mime, `.${ext}`, `${ext.toUpperCase()} 图片`);
-    if (result === "saved") showToast(`${ext.toUpperCase()} 已导出。`);
-    return result;
+    try {
+      updateLoading("正在生成图片…", 45);
+      const blob = await pageImageBlob(entries[0].page, format, quality);
+      updateLoading("正在打开保存窗口…", 92);
+      const result = await saveExportData(blob, fileName, mime, `.${ext}`, `${ext.toUpperCase()} 图片`);
+      if (result === "saved") showToast(`${ext.toUpperCase()} 已导出。`);
+      return result;
+    } finally {
+      hideLoading(`${ext.toUpperCase()} 导出完成`);
+    }
   }
 
-  showToast("正在整理图片，请稍等。");
-  const files = [];
-  for (const { page, index } of entries) {
-    const blob = await pageImageBlob(page, format, quality);
-    files.push({
-      name: `page-${String(index + 1).padStart(3, "0")}.${ext}`,
-      bytes: new Uint8Array(await blob.arrayBuffer()),
-      mime,
-    });
+  try {
+    const files = [];
+    for (let i = 0; i < entries.length; i += 1) {
+      const { page, index } = entries[i];
+      updateLoading(`正在生成第 ${i + 1} / ${entries.length} 张图片`, 5 + ((i + 1) / entries.length) * 76);
+      const blob = await pageImageBlob(page, format, quality);
+      files.push({
+        name: `page-${String(index + 1).padStart(3, "0")}.${ext}`,
+        bytes: new Uint8Array(await blob.arrayBuffer()),
+        mime,
+      });
+    }
+    updateLoading("正在打包图片…", 86);
+    const zip = makeZip(files);
+    updateLoading("正在打开保存窗口…", 94);
+    const result = await saveExportData(zip, fileName, "application/zip", ".zip", "ZIP 压缩包");
+    if (result === "saved") showToast(`${entries.length} 页图片已导出。`);
+    return result;
+  } finally {
+    hideLoading(`${ext.toUpperCase()} 导出完成`);
   }
-  const zip = makeZip(files);
-  const result = await saveExportData(zip, fileName, "application/zip", ".zip", "ZIP 压缩包");
-  if (result === "saved") showToast(`${entries.length} 页图片已导出。`);
-  return result;
 }
 
 async function saveExportData(data, suggestedName, mime, extension, description) {
   const blob = data instanceof Blob ? data : new Blob([data], { type: mime });
-  if (window.showSaveFilePicker) {
+  const picker = window.pdfStudioShowSaveFilePicker || window.showSaveFilePicker;
+  if (picker) {
     try {
-      const handle = await window.showSaveFilePicker({
+      const handle = await picker({
         suggestedName,
         types: [{ description, accept: { [mime]: [extension] } }],
       });
@@ -5144,9 +6837,8 @@ function syncExportFormatControls() {
   const format = els.exportDialog.querySelector('input[name="exportFormat"]:checked')?.value || "pdf";
   const isWord = format === "docx";
   els.exportQualityGroup.classList.toggle("hidden", isWord);
-  els.wordModeGroup.classList.toggle("hidden", !isWord);
   els.exportDialogNote.textContent = isWord
-    ? "默认“保留原版式”会把每页以高清版式放入 Word，间距、字号、颜色和排版最接近原 PDF；“可编辑文字”适合继续修改。"
+    ? "将生成可编辑 Word，并尽量保留原 PDF 的行距、字号、缩进和排版；图片页会以图片保留版式。"
     : "预估大小会因页面内容有所浮动。下一步可在系统窗口中填写文件名并选择保存位置；多张图片会保存为 ZIP。";
   els.exportConfirmBtn.textContent = isWord ? "转换并保存" : "下一步";
 }
@@ -5274,37 +6966,582 @@ async function exportAllPdf() {
 
 async function printFullPdf() {
   if (!activeDoc().pages.length) return showToast("请先加入文件。");
-  showLoading("正在准备打印预览…", 2);
+  closeExportMenu();
+  closeOtherMenu();
+  if (window.pdfStudioNativePrintHtml) {
+    await printWithNativeShell();
+    return;
+  }
+  if (state.print.desktop) {
+    openPrintCenter();
+    return;
+  }
+  printWithBrowser();
+}
+
+function printDebug(event) {
+  console.info(`[PDFStudioPrint] ${event}`);
+}
+
+function withPrintStepTimeout(promise, timeoutMessage, timeoutMs = 20000) {
+  let timer = null;
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        printDebug("print-timeout");
+        reject(new Error(timeoutMessage));
+      }, timeoutMs);
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+function canvasToPrintDataUrl(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error("打印页面转换失败"));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("打印页面读取失败"));
+      reader.readAsDataURL(blob);
+    }, "image/jpeg", 0.95);
+  });
+}
+
+async function buildNativePrintHtml(pages, onProgress = () => {}) {
+  const pageMarkup = [];
+  const renderScale = 1.65;
+  for (let index = 0; index < pages.length; index += 1) {
+    const canvas = document.createElement("canvas");
+    await renderPageToCanvas(pages[index], canvas, renderScale, { includeAnnotations: true, pixelRatio: 1 });
+    const imageUrl = await canvasToPrintDataUrl(canvas);
+    pageMarkup.push(`<section class="print-page"><img src="${imageUrl}" alt=""></section>`);
+    onProgress(index + 1, pages.length);
+    if (index % 2 === 1) await wait(0);
+  }
+  const html = `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>PDF大编辑 - 打印</title>
+  <style>
+    @page { margin: 0; }
+    html, body { margin: 0; padding: 0; background: #fff; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .print-page {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 100vh;
+      background: #fff;
+      break-after: page;
+      page-break-after: always;
+      overflow: hidden;
+    }
+    .print-page:last-child {
+      break-after: auto;
+      page-break-after: auto;
+    }
+    .print-page img {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-width: 100%;
+      max-height: 100vh;
+      object-fit: contain;
+    }
+  </style>
+</head>
+<body>${pageMarkup.join("")}</body>
+</html>`;
+  if (html.length > 115 * 1024 * 1024) {
+    throw new Error("打印内容过大，请先拆分文档后再打印。");
+  }
+  return html;
+}
+
+async function printWithNativeShell() {
+  if (state.print.submitting) return;
+  state.print.submitting = true;
+  if (els.printBtn) els.printBtn.disabled = true;
+  printDebug("print-start");
+  showLoading("正在生成打印文件", 6);
+  try {
+    const pages = activeDoc().pages.slice();
+    const bytes = await withPrintStepTimeout(buildPdfBytes(pages, (completed, total) => {
+      updateLoading(`正在生成打印文件 ${completed} / ${total}`, 6 + (completed / total) * 34);
+    }), "生成打印文件超时");
+    if (!bytes?.byteLength) throw new Error("生成打印文件失败");
+    printDebug("final-pdf-generated");
+    updateLoading("正在载入打印内容", 45);
+    let result;
+    if (window.pdfStudioNativePrintPdf) {
+      updateLoading("正在打开系统打印窗口", 88);
+      result = await window.pdfStudioNativePrintPdf(bytes);
+    } else {
+      const html = await withPrintStepTimeout(buildNativePrintHtml(pages, (completed, total) => {
+        updateLoading(`正在载入打印内容 ${completed} / ${total}`, 45 + (completed / total) * 34);
+      }), "打印页面载入失败");
+      updateLoading("正在打开系统打印窗口", 88);
+      result = await window.pdfStudioNativePrintHtml(html);
+    }
+    if (!result?.ok) {
+      const message = result?.message || "无法打开 macOS 打印窗口";
+      if (message.includes("取消")) {
+        showToast(message);
+        return;
+      }
+      throw new Error(message);
+    }
+    showToast(result.message || "打印处理完成。");
+  } catch (error) {
+    console.error(error);
+    showToast(error.message || "无法打开 macOS 打印窗口");
+  } finally {
+    state.print.submitting = false;
+    if (els.printBtn) els.printBtn.disabled = false;
+    hideLoading("打印处理完成");
+  }
+}
+
+async function printWithBrowser() {
+  const printWindow = openBrowserPrintWindow();
+  showLoading("正在准备浏览器打印…", 2);
   try {
     const bytes = await buildPdfBytes(activeDoc().pages, (completed, total) => {
       updateLoading(`正在准备第 ${completed} / ${total} 页`, 5 + (completed / total) * 88);
     });
     closePrintPreview();
-    printPreviewUrl = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-    els.printPreviewFrame.src = printPreviewUrl;
-    els.printPageSummary.textContent = `${activeDoc().pages.length} 页`;
-    els.printDialog.classList.remove("hidden");
-    els.printConfirmBtn.focus();
+    const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+    if (printWindow && !printWindow.closed) {
+      await printPdfUrlInWindow(printWindow, url);
+    } else {
+      printPreviewUrl = url;
+      await printPdfUrl(url);
+    }
   } catch (error) {
     console.error(error);
-    showToast("无法生成打印预览，请重试。");
+    showToast("浏览器阻止了打印窗口，请允许弹窗后重试。");
   } finally {
-    hideLoading("打印预览已准备");
+    hideLoading("浏览器打印已打开");
   }
 }
 
-function printPreviewDocument() {
-  const target = els.printPreviewFrame.contentWindow;
-  if (!target) return showToast("打印预览尚未准备好。");
-  target.focus();
-  target.print();
+function openBrowserPrintWindow() {
+  try {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return null;
+    printWindow.document.open();
+    printWindow.document.write(`
+      <!doctype html>
+      <html lang="zh-CN">
+        <head>
+          <meta charset="utf-8">
+          <title>PDF大编辑 - 打印</title>
+          <style>
+            body { margin: 0; display: grid; min-height: 100vh; place-items: center; font: 16px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #25272d; background: #f5f6f8; }
+          </style>
+        </head>
+        <body>正在准备打印...</body>
+      </html>
+    `);
+    printWindow.document.close();
+    return printWindow;
+  } catch (error) {
+    console.warn("无法打开打印窗口", error);
+    return null;
+  }
+}
+
+function printPdfUrlInWindow(printWindow, url) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const cleanup = () => {
+      if (settled) return;
+      settled = true;
+      setTimeout(() => URL.revokeObjectURL(url), 120000);
+      resolve();
+    };
+    printWindow.location.href = url;
+    const triggerPrint = () => {
+      try {
+        if (!printWindow.closed) {
+          printWindow.focus();
+          printWindow.print();
+        }
+      } catch (error) {
+        console.warn("浏览器打印调用受限，已保留打印窗口", error);
+      }
+      cleanup();
+    };
+    setTimeout(triggerPrint, 1200);
+  });
+}
+
+async function openPrintCenter() {
+  closePrintPreview();
+  state.print.previewToken += 1;
+  state.print.previewPage = 1;
+  state.print.previewZoom = "fit";
+  els.printDialog.classList.remove("hidden");
+  els.printStatusText.textContent = "正在读取打印机…";
+  els.printConfirmBtn.disabled = true;
+  els.advancedPrintBtn.disabled = true;
+  applyPrintPreferencesToForm(state.print.preferences || {});
+  updatePrintSettingsVisibility();
+  await refreshPrinters();
+  schedulePrintPreviewUpdate(0);
+}
+
+async function refreshPrinters() {
+  if (!window.pdfStudioGetPrinters) return;
+  els.refreshPrintersBtn.disabled = true;
+  try {
+    const result = await window.pdfStudioGetPrinters();
+    state.print.printers = result?.printers || [];
+    state.print.preferences = result?.preferences || state.print.preferences || {};
+    renderPrinterOptions();
+    applyPrintPreferencesToForm(state.print.preferences);
+    els.printerStatus.textContent = state.print.printers.length
+      ? "已读取系统打印机。默认打印机会标记在名称后。"
+      : "没有读取到打印机，请确认系统中已安装打印机。";
+  } catch (error) {
+    els.printerStatus.textContent = "读取打印机失败，请稍后重试。";
+  } finally {
+    els.refreshPrintersBtn.disabled = false;
+  }
+}
+
+function renderPrinterOptions() {
+  els.printerSelect.innerHTML = "";
+  if (!state.print.printers.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "没有可用打印机";
+    els.printerSelect.appendChild(option);
+    return;
+  }
+  state.print.printers.forEach((printer) => {
+    const option = document.createElement("option");
+    option.value = printer.name;
+    option.textContent = `${printer.displayName || printer.name}${printer.isDefault ? "（默认）" : ""}`;
+    option.title = printer.name;
+    els.printerSelect.appendChild(option);
+  });
+  const preferred = state.print.preferences?.printerName;
+  const defaultPrinter = state.print.printers.find((printer) => printer.isDefault) || state.print.printers[0];
+  els.printerSelect.value = state.print.printers.some((printer) => printer.name === preferred)
+    ? preferred
+    : defaultPrinter?.name || "";
+}
+
+function applyPrintPreferencesToForm(preferences = {}) {
+  setSelectValue(els.paperSelect, preferences.paper || "default");
+  setSelectValue(els.orientationSelect, preferences.orientation || "auto");
+  setSelectValue(els.colorSelect, preferences.color || "color");
+  setSelectValue(els.duplexSelect, preferences.duplex || "simplex");
+  setSelectValue(els.scaleSelect, preferences.scaleMode || "fit");
+  setSelectValue(els.marginSelect, preferences.marginMode || "default");
+  setSelectValue(els.pagesPerSheetSelect, String(preferences.pagesPerSheet || 1));
+  setSelectValue(els.dpiSelect, preferences.dpi || "default");
+  els.scalePercentInput.value = preferences.scalePercent || 100;
+  els.printBackgroundInput.checked = preferences.printBackground !== false;
+  const margins = preferences.margins || {};
+  els.marginTopInput.value = margins.top ?? 10;
+  els.marginRightInput.value = margins.right ?? 10;
+  els.marginBottomInput.value = margins.bottom ?? 10;
+  els.marginLeftInput.value = margins.left ?? 10;
+  if (preferences.printerName && [...els.printerSelect.options].some((option) => option.value === preferences.printerName)) {
+    els.printerSelect.value = preferences.printerName;
+  }
+  updatePrintSettingsVisibility();
+}
+
+function setSelectValue(select, value) {
+  if ([...select.options].some((option) => option.value === String(value))) select.value = String(value);
+}
+
+function handlePrintSettingsChange() {
+  updatePrintSettingsVisibility();
+  schedulePrintPreviewUpdate(360);
+}
+
+function updatePrintSettingsVisibility() {
+  const customRange = els.printRangeSelect.value === "custom";
+  els.customRangeInput.classList.toggle("hidden", !customRange);
+  els.scalePercentInput.disabled = els.scaleSelect.value !== "custom";
+  els.customMargins.classList.toggle("hidden", els.marginSelect.value !== "custom");
+  const selectedPrinter = state.print.printers.find((printer) => printer.name === els.printerSelect.value);
+  const duplexKnownUnsupported = selectedPrinter && selectedPrinter.duplexSupported === false;
+  els.duplexSelect.disabled = Boolean(duplexKnownUnsupported);
+  if (duplexKnownUnsupported) els.duplexSelect.value = "simplex";
+}
+
+function collectPrintSettings() {
+  const entries = printEntriesForRange();
+  const settings = {
+    printerName: els.printerSelect.value,
+    rangeMode: els.printRangeSelect.value,
+    customRange: els.customRangeInput.value.trim(),
+    copies: clamp(Number(els.copiesInput.value) || 1, 1, 999),
+    collate: els.collateInput.checked,
+    paper: els.paperSelect.value,
+    orientation: els.orientationSelect.value,
+    color: els.colorSelect.value,
+    duplex: els.duplexSelect.value,
+    scaleMode: els.scaleSelect.value,
+    scalePercent: clamp(Number(els.scalePercentInput.value) || 100, 10, 400),
+    pagesPerSheet: Number(els.pagesPerSheetSelect.value) || 1,
+    marginMode: els.marginSelect.value,
+    margins: {
+      top: clamp(Number(els.marginTopInput.value) || 0, 0, 100),
+      right: clamp(Number(els.marginRightInput.value) || 0, 0, 100),
+      bottom: clamp(Number(els.marginBottomInput.value) || 0, 0, 100),
+      left: clamp(Number(els.marginLeftInput.value) || 0, 0, 100),
+    },
+    printBackground: els.printBackgroundInput.checked,
+    dpi: els.dpiSelect.value,
+  };
+  if (settings.orientation === "auto" && entries.length) {
+    const dimensions = visualPageDimensions(entries[0].page);
+    settings.orientation = dimensions.width > dimensions.height ? "landscape" : "portrait";
+  }
+  settings.previewScale = settings.scaleMode === "custom" ? settings.scalePercent : 100;
+  return { settings, entries };
+}
+
+function printEntriesForRange() {
+  const doc = activeDoc();
+  if (!doc.pages.length) return [];
+  const mode = els.printRangeSelect.value;
+  if (mode === "current") return [{ page: currentPage(), index: doc.selectedIndex }];
+  if (mode === "selected") return selectedPageEntries();
+  if (mode === "custom") return parsePageRange(els.customRangeInput.value, doc.pages);
+  return doc.pages.map((page, index) => ({ page, index }));
+}
+
+function parsePageRange(value, pages) {
+  const input = value.trim();
+  if (!input) throw new Error("请输入自定义页面范围。");
+  const seen = new Set();
+  const entries = [];
+  for (const part of input.split(",")) {
+    const token = part.trim();
+    if (!token) throw new Error("页面范围格式不正确。");
+    const match = token.match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+    if (!match) throw new Error("页面范围格式不正确，请使用 1-3,6,8-10。");
+    const start = Number(match[1]);
+    const end = Number(match[2] || match[1]);
+    if (start < 1 || end < 1 || start > pages.length || end > pages.length) throw new Error("页面范围超出文档页数。");
+    if (start > end) throw new Error("页面范围起始页不能大于结束页。");
+    for (let pageNumber = start; pageNumber <= end; pageNumber += 1) {
+      if (seen.has(pageNumber)) throw new Error(`页面 ${pageNumber} 被重复选择。`);
+      seen.add(pageNumber);
+      entries.push({ page: pages[pageNumber - 1], index: pageNumber - 1 });
+    }
+  }
+  return entries;
+}
+
+function validatePrintSettings(settings, entries, requirePrinter = true) {
+  if (!entries.length) return "没有可打印页面。";
+  if (requirePrinter && !settings.printerName && state.print.desktop) return "请先选择打印机。";
+  if (!Number.isFinite(settings.copies) || settings.copies < 1) return "份数必须大于 0。";
+  if (settings.scaleMode === "custom" && (settings.scalePercent < 10 || settings.scalePercent > 400)) return "自定义缩放范围应在 10% 到 400% 之间。";
+  return "";
+}
+
+function schedulePrintPreviewUpdate(delay = 360) {
+  clearTimeout(printPreviewTimer);
+  printPreviewTimer = setTimeout(updatePrintPreview, delay);
+}
+
+async function updatePrintPreview() {
+  if (!state.print.desktop || els.printDialog.classList.contains("hidden")) return;
+  const token = ++state.print.previewToken;
+  let settings;
+  let entries;
+  try {
+    ({ settings, entries } = collectPrintSettings());
+    state.print.settings = settings;
+    state.print.pageEntries = entries;
+    const validation = validatePrintSettings(settings, entries);
+    els.printPageSummary.textContent = `${entries.length} 页`;
+    els.printRangeHint.textContent = `预计打印 ${entries.length} 页`;
+    if (validation) throw new Error(validation);
+    els.printPreviewLoading.classList.remove("hidden");
+    els.printStatusText.textContent = "正在生成打印预览…";
+    els.printConfirmBtn.disabled = true;
+    els.advancedPrintBtn.disabled = true;
+    const bytes = await buildPdfBytes(entries.map(({ page }) => page), (completed, total) => {
+      if (token === state.print.previewToken) els.printStatusText.textContent = `正在准备第 ${completed} / ${total} 页…`;
+    });
+    if (token !== state.print.previewToken) return;
+    const result = await window.pdfStudioPrintPreview(bytes, settings);
+    if (token !== state.print.previewToken) return;
+    if (!result?.ok) throw new Error(result?.message || "打印预览生成失败。");
+    state.print.previewPdf = result.data;
+    showPrintPreviewPdf(result.data);
+    await window.pdfStudioSavePrintPreferences?.(settings);
+    els.printStatusText.textContent = "预览已更新。";
+    els.printConfirmBtn.disabled = false;
+    els.advancedPrintBtn.disabled = false;
+  } catch (error) {
+    if (token !== state.print.previewToken) return;
+    els.printStatusText.textContent = error.message || "打印预览生成失败。";
+    els.printConfirmBtn.disabled = true;
+    els.advancedPrintBtn.disabled = false;
+  } finally {
+    if (token === state.print.previewToken) els.printPreviewLoading.classList.add("hidden");
+  }
+}
+
+function showPrintPreviewPdf(data) {
+  if (printPreviewUrl) URL.revokeObjectURL(printPreviewUrl);
+  const blob = new Blob([data], { type: "application/pdf" });
+  printPreviewUrl = URL.createObjectURL(blob);
+  els.printPreviewFrame.src = `${printPreviewUrl}#toolbar=0&navpanes=0&view=Fit`;
+  state.print.previewPage = 1;
+  els.printPreviewPage.textContent = `1 / ${state.print.pageEntries.length || 1}`;
+}
+
+function movePrintPreviewPage(delta) {
+  const total = Math.max(1, state.print.pageEntries.length);
+  state.print.previewPage = clamp(state.print.previewPage + delta, 1, total);
+  if (printPreviewUrl) els.printPreviewFrame.src = `${printPreviewUrl}#page=${state.print.previewPage}&toolbar=0&navpanes=0`;
+  els.printPreviewPage.textContent = `${state.print.previewPage} / ${total}`;
+}
+
+function setPrintPreviewZoom(delta) {
+  const current = typeof state.print.previewZoom === "number" ? state.print.previewZoom : 1;
+  state.print.previewZoom = clamp(current + delta, 0.25, 3);
+  if (printPreviewUrl) els.printPreviewFrame.src = `${printPreviewUrl}#page=${state.print.previewPage}&zoom=${Math.round(state.print.previewZoom * 100)}&toolbar=0&navpanes=0`;
+}
+
+function setPrintPreviewMode(mode) {
+  state.print.previewZoom = mode;
+  const view = mode === "width" ? "FitH" : "Fit";
+  if (printPreviewUrl) els.printPreviewFrame.src = `${printPreviewUrl}#page=${state.print.previewPage}&view=${view}&toolbar=0&navpanes=0`;
+}
+
+async function finalPrintBytesFromSettings(requirePrinter = true) {
+  const { settings, entries } = collectPrintSettings();
+  const validation = validatePrintSettings(settings, entries, requirePrinter);
+  if (validation) throw new Error(validation);
+  const bytes = await buildPdfBytes(entries.map(({ page }) => page), (completed, total) => {
+    updateLoading(`正在准备第 ${completed} / ${total} 页`, 5 + (completed / total) * 70);
+  });
+  return { bytes, settings, entries };
+}
+
+async function submitPrintJob() {
+  if (state.print.submitting) return;
+  state.print.submitting = true;
+  els.printConfirmBtn.disabled = true;
+  showLoading("正在发送打印任务…", 5);
+  try {
+    const { bytes, settings } = await finalPrintBytesFromSettings(true);
+    updateLoading("正在发送到打印机…", 88);
+    const result = await window.pdfStudioPrintDocument(bytes, settings);
+    if (!result?.ok) throw new Error(result?.message || "打印任务失败。");
+    showToast("打印任务已发送。");
+    closePrintPreview();
+  } catch (error) {
+    showToast(error.message || "打印失败，请重试。");
+    els.printStatusText.textContent = error.message || "打印失败，请重试。";
+  } finally {
+    state.print.submitting = false;
+    els.printConfirmBtn.disabled = false;
+    hideLoading("打印处理完成");
+  }
+}
+
+async function submitAdvancedPrintJob() {
+  if (state.print.submitting) return;
+  state.print.submitting = true;
+  els.advancedPrintBtn.disabled = true;
+  showLoading("正在打开系统高级打印…", 5);
+  try {
+    const { bytes, settings } = await finalPrintBytesFromSettings(false);
+    const result = await window.pdfStudioAdvancedPrint(bytes, settings);
+    if (!result?.ok) throw new Error(result?.message || "系统高级打印已取消或失败。");
+    showToast("打印任务已发送。");
+    closePrintPreview();
+  } catch (error) {
+    showToast(error.message || "无法打开系统高级打印。");
+    els.printStatusText.textContent = error.message || "无法打开系统高级打印。";
+  } finally {
+    state.print.submitting = false;
+    els.advancedPrintBtn.disabled = false;
+    hideLoading("打印处理完成");
+  }
+}
+
+function printPdfUrl(url) {
+  return new Promise((resolve, reject) => {
+    const frame = document.createElement("iframe");
+    let settled = false;
+    const revoke = () => {
+      frame.remove();
+      if (printPreviewUrl === url) {
+        URL.revokeObjectURL(printPreviewUrl);
+        printPreviewUrl = null;
+      }
+    };
+    const cleanup = () => {
+      if (settled) return;
+      settled = true;
+      setTimeout(revoke, 1000);
+      resolve();
+    };
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      revoke();
+      reject(error);
+    };
+    frame.style.position = "fixed";
+    frame.style.right = "0";
+    frame.style.bottom = "0";
+    frame.style.width = "1px";
+    frame.style.height = "1px";
+    frame.style.border = "0";
+    frame.style.opacity = "0";
+    frame.style.pointerEvents = "none";
+    frame.onload = () => {
+      setTimeout(() => {
+        try {
+          frame.contentWindow.focus();
+          frame.contentWindow.onafterprint = cleanup;
+          frame.contentWindow.print();
+          setTimeout(cleanup, 60000);
+        } catch (error) {
+          fail(error);
+        }
+      }, 250);
+    };
+    frame.onerror = () => fail(new Error("打印文件载入失败"));
+    frame.src = url;
+    document.body.appendChild(frame);
+  });
 }
 
 function closePrintPreview() {
+  clearTimeout(printPreviewTimer);
+  state.print.previewToken += 1;
   els.printDialog.classList.add("hidden");
   els.printPreviewFrame.removeAttribute("src");
   if (printPreviewUrl) URL.revokeObjectURL(printPreviewUrl);
   printPreviewUrl = null;
+  state.print.previewPdf = null;
+  state.print.pageEntries = [];
+  els.printPreviewLoading.classList.add("hidden");
 }
 
 async function exportSelectedPagePdf() {
@@ -5372,10 +7609,11 @@ function quantizeCanvasColors(canvas, step) {
   context.putImageData(image, 0, 0);
 }
 
-async function buildCompressedPdfBytes(pages, quality = "balanced") {
+async function buildCompressedPdfBytes(pages, quality = "balanced", onProgress = () => {}) {
   const profile = EXPORT_QUALITY_PROFILES[quality] || EXPORT_QUALITY_PROFILES.balanced;
   const out = await PDFDocument.create();
-  for (const page of pages) {
+  for (let index = 0; index < pages.length; index += 1) {
+    const page = pages[index];
     const canvas = document.createElement("canvas");
     const renderScale = page.type === "image" ? profile.imageScale : profile.pdfScale;
     await renderPageToCanvas(page, canvas, renderScale, { includeAnnotations: true, pixelRatio: 1 });
@@ -5387,6 +7625,7 @@ async function buildCompressedPdfBytes(pages, quality = "balanced") {
     };
     const pdfPage = out.addPage([dimensions.width, dimensions.height]);
     pdfPage.drawImage(image, { x: 0, y: 0, width: dimensions.width, height: dimensions.height });
+    onProgress(index + 1, pages.length);
   }
   return out.save({ useObjectStreams: true });
 }
@@ -5429,67 +7668,96 @@ async function buildPdfBytes(pages, onProgress = () => {}) {
 
 function drawAnnotations(ctx, page, width, height, scale) {
   (page.annotations || []).forEach((annotation) => {
-    if (annotation.type === "draw" || annotation.type === "line") {
-      drawCanvasStroke(ctx, annotation, width, height, scale);
+    drawAnnotationToCanvas(ctx, annotation, width, height, scale);
+  });
+}
+
+async function drawAnnotationsAsync(ctx, page, width, height, scale) {
+  for (const annotation of page.annotations || []) {
+    let image = null;
+    if (annotation.type === "image") {
+      try {
+        image = await loadAnnotationImage(annotation);
+      } catch (error) {
+        image = null;
+      }
+    }
+    drawAnnotationToCanvas(ctx, annotation, width, height, scale, image);
+  }
+}
+
+function drawAnnotationToCanvas(ctx, annotation, width, height, scale, loadedImage = null) {
+  if (annotation.type === "draw" || annotation.type === "line") {
+    drawCanvasStroke(ctx, annotation, width, height, scale);
+    return;
+  }
+  const x = annotation.x * width;
+  const y = annotation.y * height;
+  const boxWidth = annotation.width * width;
+  const boxHeight = annotation.height * height;
+  ctx.save();
+  if (annotation.type === "image") {
+    const image = loadedImage || cachedAnnotationImage(annotation);
+    if (image) ctx.drawImage(image, x, y, boxWidth, boxHeight);
+  } else if (annotation.type === "highlight") {
+    if (annotation.noColor) {
+      ctx.restore();
       return;
     }
-    const x = annotation.x * width;
-    const y = annotation.y * height;
-    const boxWidth = annotation.width * width;
-    const boxHeight = annotation.height * height;
-    ctx.save();
-    if (annotation.type === "text") {
-      ctx.beginPath();
-      ctx.rect(x, y, boxWidth, boxHeight);
-      ctx.clip();
-      const fontSize = Math.max(6, annotation.fontSize * scale);
-      const fontStyle = `${annotation.italic ? "italic " : ""}${annotation.bold ? "700 " : "400 "}${fontSize}px ${quoteFontFamily(annotation.fontFamily)}`;
-      ctx.font = fontStyle;
-      ctx.fillStyle = annotation.color;
-      ctx.textBaseline = "top";
-      ctx.textAlign = annotation.align;
-      const lines = wrapCanvasText(ctx, annotation.text, Math.max(4, boxWidth - 8 * scale));
-      const lineHeight = fontSize * 1.2;
-      const textY = y + 4 * scale;
-      const textX = annotation.align === "left"
-        ? x + 4 * scale
-        : annotation.align === "right" ? x + boxWidth - 4 * scale : x + boxWidth / 2;
-      lines.forEach((line, index) => {
-        const lineY = textY + index * lineHeight;
-        ctx.fillText(line, textX, lineY, Math.max(1, boxWidth - 8 * scale));
-        if (annotation.underline && line) {
-          const lineWidth = Math.min(ctx.measureText(line).width, boxWidth - 8 * scale);
-          const underlineX = annotation.align === "left"
-            ? textX
-            : annotation.align === "right" ? textX - lineWidth : textX - lineWidth / 2;
-          ctx.beginPath();
-          ctx.lineWidth = Math.max(1, fontSize / 18);
-          ctx.moveTo(underlineX, lineY + fontSize + 1);
-          ctx.lineTo(underlineX + lineWidth, lineY + fontSize + 1);
-          ctx.strokeStyle = annotation.color;
-          ctx.stroke();
-        }
-      });
-    } else {
-      const borderWidth = Math.max(0, annotation.borderWidth * scale);
-      ctx.beginPath();
-      if (annotation.type === "circle") {
-        ctx.ellipse(x + boxWidth / 2, y + boxHeight / 2, Math.max(1, boxWidth / 2 - borderWidth / 2), Math.max(1, boxHeight / 2 - borderWidth / 2), 0, 0, Math.PI * 2);
-      } else {
-        ctx.rect(x + borderWidth / 2, y + borderWidth / 2, Math.max(1, boxWidth - borderWidth), Math.max(1, boxHeight - borderWidth));
-      }
-      if (annotation.fillEnabled) {
-        ctx.fillStyle = annotation.fillColor;
-        ctx.fill();
-      }
-      if (borderWidth > 0) {
-        ctx.lineWidth = borderWidth;
-        ctx.strokeStyle = annotation.borderColor;
+    ctx.globalAlpha = 0.42;
+    ctx.fillStyle = annotation.color || "#fff176";
+    ctx.fillRect(x, y, boxWidth, boxHeight);
+  } else if (annotation.type === "text") {
+    ctx.beginPath();
+    ctx.rect(x, y, boxWidth, boxHeight);
+    ctx.clip();
+    const fontSize = Math.max(6, annotation.fontSize * scale);
+    const fontStyle = `${annotation.italic ? "italic " : ""}${annotation.bold ? "700 " : "400 "}${fontSize}px ${quoteFontFamily(annotation.fontFamily)}`;
+    ctx.font = fontStyle;
+    ctx.fillStyle = annotation.color;
+    ctx.textBaseline = "top";
+    ctx.textAlign = annotation.align;
+    const lines = wrapCanvasText(ctx, annotation.text, Math.max(4, boxWidth - 8 * scale));
+    const lineHeight = fontSize * 1.2;
+    const textY = y + 4 * scale;
+    const textX = annotation.align === "left"
+      ? x + 4 * scale
+      : annotation.align === "right" ? x + boxWidth - 4 * scale : x + boxWidth / 2;
+    lines.forEach((line, index) => {
+      const lineY = textY + index * lineHeight;
+      ctx.fillText(line, textX, lineY, Math.max(1, boxWidth - 8 * scale));
+      if (annotation.underline && line) {
+        const lineWidth = Math.min(ctx.measureText(line).width, boxWidth - 8 * scale);
+        const underlineX = annotation.align === "left"
+          ? textX
+          : annotation.align === "right" ? textX - lineWidth : textX - lineWidth / 2;
+        ctx.beginPath();
+        ctx.lineWidth = Math.max(1, fontSize / 18);
+        ctx.moveTo(underlineX, lineY + fontSize + 1);
+        ctx.lineTo(underlineX + lineWidth, lineY + fontSize + 1);
+        ctx.strokeStyle = annotation.color;
         ctx.stroke();
       }
+    });
+  } else if (annotation.type === "rect" || annotation.type === "circle") {
+    const borderWidth = Math.max(0, annotation.borderWidth * scale);
+    ctx.beginPath();
+    if (annotation.type === "circle") {
+      ctx.ellipse(x + boxWidth / 2, y + boxHeight / 2, Math.max(1, boxWidth / 2 - borderWidth / 2), Math.max(1, boxHeight / 2 - borderWidth / 2), 0, 0, Math.PI * 2);
+    } else {
+      ctx.rect(x + borderWidth / 2, y + borderWidth / 2, Math.max(1, boxWidth - borderWidth), Math.max(1, boxHeight - borderWidth));
     }
-    ctx.restore();
-  });
+    if (annotation.fillEnabled) {
+      ctx.fillStyle = annotation.fillColor;
+      ctx.fill();
+    }
+    if (borderWidth > 0) {
+      ctx.lineWidth = borderWidth;
+      ctx.strokeStyle = annotation.borderColor;
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
 }
 
 function drawCanvasStroke(ctx, annotation, width, height, scale) {
@@ -5570,7 +7838,7 @@ async function makeAnnotationOverlay(page, width, height) {
   canvas.height = Math.max(1, Math.ceil(height * pixelRatio));
   const ctx = canvas.getContext("2d");
   ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-  drawAnnotations(ctx, page, width, height, 1);
+  await drawAnnotationsAsync(ctx, page, width, height, 1);
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
   return new Uint8Array(await blob.arrayBuffer());
 }
@@ -5885,18 +8153,20 @@ function updateUi() {
     els.addTextBtn,
     els.addRectBtn,
     els.addCircleBtn,
+    els.highlightTextBtn,
+    els.insertImageBtn,
     els.selectToolBtn,
     els.drawBtn,
     els.lineBtn,
     els.selectAllBtn,
     els.exportAllMenuBtn,
     els.exportSelectedMenuBtn,
-  ].forEach((button) => {
+  ].filter(Boolean).forEach((button) => {
     button.disabled = !hasPage;
   });
 }
 
-async function buildWordDocument(entries, mode = "fidelity") {
+async function buildWordDocument(entries) {
   const encoder = new TextEncoder();
   const mediaFiles = [];
   const imageRelationships = [];
@@ -5908,7 +8178,7 @@ async function buildWordDocument(entries, mode = "fidelity") {
     updateLoading(`正在转换第 ${position + 1} / ${entries.length} 页`, 5 + ((position + 1) / entries.length) * 86);
     const textLines = await extractWordTextLines(page);
     const editableCharacters = textLines.reduce((total, line) => total + line.text.replace(/\s/g, "").length, 0);
-    const usePageImage = mode === "fidelity" || page.type === "image" || editableCharacters < 8;
+    const usePageImage = page.type === "image" || editableCharacters < 8;
 
     if (usePageImage) {
       imageId += 1;
@@ -5919,16 +8189,22 @@ async function buildWordDocument(entries, mode = "fidelity") {
       imageRelationships.push(
         `<Relationship Id="${relationshipId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${fileName}"/>`,
       );
-      const hiddenText = mode === "fidelity" ? textLines.map((line) => line.text).join("\n") : "";
-      bodyParts.push(wordImageParagraphXml(relationshipId, image.width, image.height, imageId, index + 1, hiddenText));
+      bodyParts.push(wordImageParagraphXml(relationshipId, image.width, image.height, imageId, index + 1));
     } else {
       const medianSize = median(textLines.map((line) => line.fontSize).filter(Boolean)) || 11;
-      textLines.forEach((line) => {
-        bodyParts.push(wordParagraphXml(line.text, {
-          fontSize: line.fontSize,
-          bold: line.bold || (line.fontSize > medianSize * 1.28 && line.text.length < 100),
-          after: line.after,
-        }));
+      groupWordLines(textLines).forEach((block) => {
+        if (block.type === "table") {
+          bodyParts.push(wordTableXml(block.lines));
+          return;
+        }
+        block.lines.forEach((line) => {
+          bodyParts.push(wordParagraphXml(line.text, {
+            fontSize: line.fontSize,
+            bold: line.bold || (line.fontSize > medianSize * 1.28 && line.text.length < 100),
+            after: line.after,
+            indent: line.indent,
+          }));
+        });
       });
       wordAnnotationParagraphs(page).forEach((paragraph) => bodyParts.push(paragraph));
     }
@@ -6066,11 +8342,15 @@ async function extractWordTextLines(page) {
       const fontSize = median(line.items.map((item) => item.fontSize)) || 11;
       const nextLine = lines[lineIndex + 1];
       const verticalGap = nextLine ? Math.abs(line.y - nextLine.y) : fontSize;
+      const minX = Math.max(0, Math.min(...line.items.map((item) => item.x || 0)));
+      const usableTwips = 10200;
       return {
         text,
+        cells: text.split("\t").map((cell) => cell.trim()).filter(Boolean),
         fontSize: clamp(fontSize, 8, 36),
         bold: line.items.filter((item) => item.bold).length > line.items.length / 2,
         after: verticalGap > fontSize * 1.75 ? 180 : 45,
+        indent: clamp(Math.round((minX / Math.max(1, page.width)) * usableTwips), 0, 9000),
       };
     }).filter((line) => line.text.trim());
   } catch (error) {
@@ -6138,12 +8418,38 @@ async function renderWordPageImage(page) {
   };
 }
 
+function groupWordLines(lines) {
+  const blocks = [];
+  let tableLines = [];
+  const flushTable = () => {
+    if (tableLines.length >= 2) {
+      blocks.push({ type: "table", lines: tableLines });
+    } else if (tableLines.length) {
+      blocks.push({ type: "paragraphs", lines: tableLines });
+    }
+    tableLines = [];
+  };
+
+  lines.forEach((line) => {
+    const looksTabular = line.cells?.length >= 2 && line.text.includes("\t");
+    if (looksTabular) {
+      tableLines.push(line);
+      return;
+    }
+    flushTable();
+    blocks.push({ type: "paragraphs", lines: [line] });
+  });
+  flushTable();
+  return blocks;
+}
+
 function wordParagraphXml(text, options = {}) {
   const fontSize = clamp(Number(options.fontSize) || 11, 6, 72);
   const halfPoints = Math.round(fontSize * 2);
   const fontFamily = wordXmlEscape(options.fontFamily || "Arial");
   const color = String(options.color || "#202124").replace("#", "").toUpperCase();
   const align = ["left", "center", "right"].includes(options.align) ? options.align : "left";
+  const indent = Math.max(0, Math.round(Number(options.indent) || 0));
   const runProperties = [
     `<w:rFonts w:ascii="${fontFamily}" w:hAnsi="${fontFamily}" w:eastAsia="${fontFamily}"/>`,
     `<w:sz w:val="${halfPoints}"/><w:szCs w:val="${halfPoints}"/>`,
@@ -6156,7 +8462,23 @@ function wordParagraphXml(text, options = {}) {
     const tab = index ? "<w:tab/>" : "";
     return `<w:r><w:rPr>${runProperties}</w:rPr>${tab}<w:t xml:space="preserve">${wordXmlEscape(part)}</w:t></w:r>`;
   }).join("");
-  return `<w:p><w:pPr><w:jc w:val="${align}"/><w:spacing w:after="${Math.max(0, Math.round(options.after ?? 80))}" w:line="${Math.max(240, Math.round(fontSize * 25))}" w:lineRule="auto"/></w:pPr>${runs || "<w:r><w:t></w:t></w:r>"}</w:p>`;
+  return `<w:p><w:pPr><w:jc w:val="${align}"/>${indent ? `<w:ind w:left="${indent}"/>` : ""}<w:spacing w:after="${Math.max(0, Math.round(options.after ?? 80))}" w:line="${Math.max(240, Math.round(fontSize * 25))}" w:lineRule="auto"/></w:pPr>${runs || "<w:r><w:t></w:t></w:r>"}</w:p>`;
+}
+
+function wordTableXml(lines) {
+  const columnCount = Math.max(2, Math.min(8, Math.max(...lines.map((line) => line.cells.length))));
+  const tableWidth = 9360;
+  const columnWidth = Math.floor(tableWidth / columnCount);
+  const grid = Array.from({ length: columnCount }, () => `<w:gridCol w:w="${columnWidth}"/>`).join("");
+  const rows = lines.map((line) => {
+    const cells = Array.from({ length: columnCount }, (_, index) => line.cells[index] || "");
+    return `<w:tr>${cells.map((cell) => `<w:tc><w:tcPr><w:tcW w:w="${columnWidth}" w:type="dxa"/><w:tcMar><w:top w:w="80" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tcMar></w:tcPr>${wordParagraphXml(cell, { fontSize: line.fontSize, bold: line.bold, after: 0 })}</w:tc>`).join("")}</w:tr>`;
+  }).join("");
+  return `<w:tbl>
+  <w:tblPr><w:tblW w:w="${tableWidth}" w:type="dxa"/><w:tblInd w:w="0" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4" w:color="D8D9DD"/><w:left w:val="single" w:sz="4" w:color="D8D9DD"/><w:bottom w:val="single" w:sz="4" w:color="D8D9DD"/><w:right w:val="single" w:sz="4" w:color="D8D9DD"/><w:insideH w:val="single" w:sz="4" w:color="E5E7EB"/><w:insideV w:val="single" w:sz="4" w:color="E5E7EB"/></w:tblBorders><w:tblLook w:val="04A0"/></w:tblPr>
+  <w:tblGrid>${grid}</w:tblGrid>
+  ${rows}
+</w:tbl>`;
 }
 
 function wordImageParagraphXml(relationshipId, width, height, imageId, pageNumber, hiddenText = "") {

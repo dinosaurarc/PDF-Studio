@@ -1,6 +1,6 @@
 {
   "name": "pdf-studio-desktop",
-  "version": "0.3.0",
+  "version": "0.3.3",
   "description": "PDF大编辑 / PDF Studio desktop application",
   "main": "main.cjs",
   "author": "PDF Studio",
@@ -50,11 +50,15 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "artifactName": "PDF-Studio-Windows-${version}-${arch}.${ext}"
@@ -92,11 +96,15 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["universal"]
+          "arch": [
+            "universal"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["universal"]
+          "arch": [
+            "universal"
+          ]
         }
       ],
       "artifactName": "PDF-Studio-macOS-${version}-${arch}.${ext}",

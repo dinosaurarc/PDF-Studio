@@ -2,8 +2,50 @@ import * as pdfjsLib from "./vendor/pdf.min.mjs";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "./vendor/pdf.worker.min.mjs";
 
-const { PDFDocument, degrees } = PDFLib;
+let { PDFDocument, degrees } = globalThis.PDFLib || {};
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+function refreshPdfLib() {
+  const lib = globalThis.PDFLib || {};
+  if (lib.PDFDocument) PDFDocument = lib.PDFDocument;
+  if (lib.degrees) degrees = lib.degrees;
+  return Boolean(PDFDocument && degrees);
+}
+
+function requirePdfLib() {
+  if (!refreshPdfLib()) {
+    throw new Error("PDF 基础库没有载入，请刷新页面后再试。");
+  }
+  return { PDFDocument, degrees };
+}
+
+async function ensurePdfJsReady() {
+  const ready = typeof pdfJsReady === "undefined" ? null : await pdfJsReady;
+  const engine = ready || pdfjsLib;
+  if (!engine?.getDocument) {
+    throw new Error("PDF 阅读引擎没有载入，请刷新页面后再试。");
+  }
+  return engine;
+}
+
+function refreshIcons() {
+  try {
+    globalThis.lucide?.createIcons?.();
+  } catch (error) {
+    console.warn("图标刷新失败", error);
+  }
+}
+
+function createIcon(name, attrs = {}) {
+  const iconApi = globalThis.lucide;
+  if (!iconApi?.createElement || !iconApi?.icons?.[name]) {
+    const fallback = document.createElement("span");
+    fallback.textContent = "↕";
+    fallback.setAttribute("aria-hidden", "true");
+    return fallback;
+  }
+  return iconApi.createElement(iconApi.icons[name], attrs);
+}
 
 const EXPORT_QUALITY_PROFILES = {
   original: { pdfScale: 2.25, imageScale: 1, jpegQuality: 0.96, pngQuantize: 1, estimateRatio: 1 },
@@ -29,6 +71,21 @@ const state = {
   lineBrush: { color: "#202124", lineWidth: 3, dash: "solid" },
   exportScope: "all",
   update: { status: "idle", currentVersion: "", version: "", portable: false, supported: false },
+  print: {
+    desktop: false,
+    native: false,
+    printers: [],
+    preferences: {},
+    previewToken: 0,
+    previewUrl: null,
+    previewPdf: null,
+    previewPage: 1,
+    previewZoom: "fit",
+    submitting: false,
+    settings: null,
+    pageEntries: [],
+  },
+  nativeFullscreen: false,
   thumbRailCollapsed: false,
   sidePanelCollapsed: false,
   sidePanelWasNarrow: window.innerWidth < 1120,
@@ -41,6 +98,7 @@ const state = {
 };
 
 const els = {
+  topbar: document.querySelector(".topbar"),
   fileInput: document.querySelector("#fileInput"),
   docTabs: document.querySelector("#docTabs"),
   openBtn: document.querySelector("#openBtn"),
@@ -54,10 +112,12 @@ const els = {
   exportSelectedMenuBtn: document.querySelector("#exportSelectedMenuBtn"),
   exportSelectedMenuLabel: document.querySelector("#exportSelectedMenuLabel"),
   printBtn: document.querySelector("#printBtn"),
+  fullScreenBtn: document.querySelector("#fullScreenBtn"),
   otherBtn: document.querySelector("#otherBtn"),
   otherMenu: document.querySelector("#otherMenu"),
   menuSearchBtn: document.querySelector("#menuSearchBtn"),
   menuPrintBtn: document.querySelector("#menuPrintBtn"),
+  menuFullScreenBtn: document.querySelector("#menuFullScreenBtn"),
   menuZoomOutBtn: document.querySelector("#menuZoomOutBtn"),
   menuZoomInBtn: document.querySelector("#menuZoomInBtn"),
   menuFitBtn: document.querySelector("#menuFitBtn"),
@@ -130,7 +190,6 @@ const els = {
   exportDialog: document.querySelector("#exportDialog"),
   exportRangeSummary: document.querySelector("#exportRangeSummary"),
   exportQualityGroup: document.querySelector("#exportQualityGroup"),
-  wordModeGroup: document.querySelector("#wordModeGroup"),
   exportDialogNote: document.querySelector("#exportDialogNote"),
   qualityEstimateOriginal: document.querySelector("#qualityEstimateOriginal"),
   qualityEstimateHigh: document.querySelector("#qualityEstimateHigh"),
@@ -150,13 +209,48 @@ const els = {
   uninstallCancelBtn: document.querySelector("#uninstallCancelBtn"),
   uninstallConfirmBtn: document.querySelector("#uninstallConfirmBtn"),
   printDialog: document.querySelector("#printDialog"),
+  printSettingsForm: document.querySelector("#printSettingsForm"),
+  printerSelect: document.querySelector("#printerSelect"),
+  refreshPrintersBtn: document.querySelector("#refreshPrintersBtn"),
+  printerStatus: document.querySelector("#printerStatus"),
+  printRangeSelect: document.querySelector("#printRangeSelect"),
+  customRangeInput: document.querySelector("#customRangeInput"),
+  printRangeHint: document.querySelector("#printRangeHint"),
+  copiesInput: document.querySelector("#copiesInput"),
+  collateInput: document.querySelector("#collateInput"),
+  paperSelect: document.querySelector("#paperSelect"),
+  orientationSelect: document.querySelector("#orientationSelect"),
+  colorSelect: document.querySelector("#colorSelect"),
+  duplexSelect: document.querySelector("#duplexSelect"),
+  scaleSelect: document.querySelector("#scaleSelect"),
+  scalePercentInput: document.querySelector("#scalePercentInput"),
+  pagesPerSheetSelect: document.querySelector("#pagesPerSheetSelect"),
+  dpiSelect: document.querySelector("#dpiSelect"),
+  marginSelect: document.querySelector("#marginSelect"),
+  customMargins: document.querySelector("#customMargins"),
+  marginTopInput: document.querySelector("#marginTopInput"),
+  marginRightInput: document.querySelector("#marginRightInput"),
+  marginBottomInput: document.querySelector("#marginBottomInput"),
+  marginLeftInput: document.querySelector("#marginLeftInput"),
+  printBackgroundInput: document.querySelector("#printBackgroundInput"),
   printPreviewFrame: document.querySelector("#printPreviewFrame"),
+  printPreviewLoading: document.querySelector("#printPreviewLoading"),
+  printStatusText: document.querySelector("#printStatusText"),
   printPageSummary: document.querySelector("#printPageSummary"),
+  printPreviewPage: document.querySelector("#printPreviewPage"),
+  previewPrevBtn: document.querySelector("#previewPrevBtn"),
+  previewNextBtn: document.querySelector("#previewNextBtn"),
+  previewZoomOutBtn: document.querySelector("#previewZoomOutBtn"),
+  previewZoomInBtn: document.querySelector("#previewZoomInBtn"),
+  previewFitBtn: document.querySelector("#previewFitBtn"),
+  previewWidthBtn: document.querySelector("#previewWidthBtn"),
   printCancelBtn: document.querySelector("#printCancelBtn"),
   printConfirmBtn: document.querySelector("#printConfirmBtn"),
+  advancedPrintBtn: document.querySelector("#advancedPrintBtn"),
   loadingBar: document.querySelector("#loadingBar"),
   loadingText: document.querySelector("#loadingText"),
   loadingPercent: document.querySelector("#loadingPercent"),
+  loadingCancelBtn: document.querySelector("#loadingCancelBtn"),
   loadingProgress: document.querySelector("#loadingProgress"),
   searchStatus: document.querySelector("#searchStatus"),
   dragPositionTip: document.querySelector("#dragPositionTip"),
@@ -175,20 +269,33 @@ let exportEstimateToken = 0;
 let renderToken = 0;
 let pendingCloseChoice = null;
 let printPreviewUrl = null;
+let printPreviewTimer = null;
+let loadingCancelHandler = null;
 const fileHandles = new WeakMap();
 const nativeOpenKeys = new Set();
 const localFontSources = new Map();
 const loadedLocalFonts = new Set();
 let fileInputMode = "open";
 
-lucide.createIcons();
-createDocument("未命名文档");
-bindEvents();
-syncSidePanelForViewport(true);
-updateUi();
-maybeLoadDemo();
-enableOfflineWebApp();
-configureDesktopFeatures();
+startApp();
+
+function startApp() {
+  try {
+    globalThis.PDF_STUDIO_BOOTED = true;
+    refreshIcons();
+    createDocument("未命名文档");
+    bindEvents();
+    syncSidePanelForViewport(true);
+    updateUi();
+    maybeLoadDemo();
+    enableOfflineWebApp();
+    configureDesktopFeatures();
+  } catch (error) {
+    console.error("PDF 大编辑启动失败", error);
+    const message = error?.message || "页面启动失败";
+    setTimeout(() => showToast(`启动失败：${message}`), 0);
+  }
+}
 
 function enableOfflineWebApp() {
   if (location.protocol !== "https:" || !("serviceWorker" in navigator)) return;
@@ -217,10 +324,15 @@ async function configureDesktopFeatures() {
   try {
     const info = await window.pdfStudioGetRuntimeInfo();
     state.update = { ...state.update, ...(info || {}), supported: Boolean(info?.updateSupported) };
+    state.print.native = Boolean(window.pdfStudioNativePrintHtml);
+    state.print.desktop = Boolean(window.pdfStudioGetPrinters && window.pdfStudioPrintPreview && window.pdfStudioPrintDocument);
+    if (els.printBtn) els.printBtn.querySelector("span").textContent = "打印";
+    els.menuPrintBtn.textContent = "打印";
     els.checkUpdateBtn.classList.remove("hidden");
     els.uninstallBtn.classList.remove("hidden");
     if (info?.portable) els.checkUpdateBtn.textContent = "检查更新（免安装版）";
     window.pdfStudioOnUpdateState?.(applyUpdateState);
+    window.pdfStudioOnNativeOpenPaths?.((handles, options) => window.pdfStudioOpenNativeHandles(handles, options));
   } catch (error) {
     console.warn("无法读取桌面版信息", error);
   }
@@ -236,6 +348,44 @@ function toggleOtherMenu() {
 function closeOtherMenu() {
   els.otherMenu.classList.add("hidden");
   els.otherBtn.setAttribute("aria-expanded", "false");
+}
+
+async function toggleFullscreen() {
+  closeOtherMenu();
+  try {
+    if (window.pdfStudioNativeToggleFullscreen) {
+      state.nativeFullscreen = !state.nativeFullscreen;
+      await window.pdfStudioNativeToggleFullscreen();
+      syncFullscreenButtons();
+    } else if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    } else {
+      await document.documentElement.requestFullscreen();
+    }
+    els.fullScreenBtn.blur();
+  } catch (error) {
+    showToast("当前环境无法进入全屏。");
+  }
+}
+
+function syncFullscreenButtons() {
+  const active = Boolean(document.fullscreenElement || state.nativeFullscreen);
+  const label = active ? "退出全屏" : "全屏";
+  document.body.classList.toggle("fullscreen-reader", active);
+  document.body.classList.toggle("fullscreen-menu-visible", false);
+  els.fullScreenBtn.querySelector("span").textContent = label;
+  els.fullScreenBtn.title = active ? "退出全屏模式" : "进入全屏模式";
+  els.menuFullScreenBtn.textContent = label;
+  if (state.scale === "fit") scheduleFitRenderAfterPanelChange();
+}
+
+function handleFullscreenMouseMove(event) {
+  if (!document.body.classList.contains("fullscreen-reader")) return;
+  if (event.clientY <= 8) {
+    document.body.classList.add("fullscreen-menu-visible");
+  } else if (event.clientY > 78 && !els.topbar?.matches(":hover, :focus-within")) {
+    document.body.classList.remove("fullscreen-menu-visible");
+  }
 }
 
 function openCompactSearch() {
@@ -436,7 +586,8 @@ function bindEvents() {
   });
   els.exportAllMenuBtn.addEventListener("click", () => openExportDialog("all"));
   els.exportSelectedMenuBtn.addEventListener("click", () => openExportDialog("selected"));
-  els.printBtn.addEventListener("click", printFullPdf);
+  els.printBtn?.addEventListener("click", printFullPdf);
+  els.fullScreenBtn.addEventListener("click", toggleFullscreen);
   els.otherBtn.addEventListener("click", (event) => {
     event.stopPropagation();
     toggleOtherMenu();
@@ -445,6 +596,7 @@ function bindEvents() {
     closeOtherMenu();
     printFullPdf();
   });
+  els.menuFullScreenBtn.addEventListener("click", toggleFullscreen);
   els.menuSearchBtn.addEventListener("click", openCompactSearch);
   els.menuZoomOutBtn.addEventListener("click", () => adjustZoomFromMenu(-10));
   els.menuZoomInBtn.addEventListener("click", () => adjustZoomFromMenu(10));
@@ -462,7 +614,22 @@ function bindEvents() {
   els.uninstallCancelBtn.addEventListener("click", closeUninstallDialog);
   els.uninstallConfirmBtn.addEventListener("click", confirmUninstall);
   els.printCancelBtn.addEventListener("click", closePrintPreview);
-  els.printConfirmBtn.addEventListener("click", printPreviewDocument);
+  els.printConfirmBtn.addEventListener("click", submitPrintJob);
+  els.advancedPrintBtn.addEventListener("click", submitAdvancedPrintJob);
+  els.refreshPrintersBtn.addEventListener("click", refreshPrinters);
+  els.printSettingsForm.addEventListener("input", handlePrintSettingsChange);
+  els.printSettingsForm.addEventListener("change", handlePrintSettingsChange);
+  els.previewPrevBtn.addEventListener("click", () => movePrintPreviewPage(-1));
+  els.previewNextBtn.addEventListener("click", () => movePrintPreviewPage(1));
+  els.previewZoomOutBtn.addEventListener("click", () => setPrintPreviewZoom(-0.1));
+  els.previewZoomInBtn.addEventListener("click", () => setPrintPreviewZoom(0.1));
+  els.previewFitBtn.addEventListener("click", () => setPrintPreviewMode("fit"));
+  els.previewWidthBtn.addEventListener("click", () => setPrintPreviewMode("width"));
+  els.loadingCancelBtn.addEventListener("click", () => {
+    if (loadingCancelHandler) loadingCancelHandler();
+  });
+  document.addEventListener("fullscreenchange", syncFullscreenButtons);
+  document.addEventListener("mousemove", handleFullscreenMouseMove);
   els.searchBtn.addEventListener("click", searchText);
   els.searchInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") searchText();
@@ -549,6 +716,11 @@ function bindEvents() {
       closePrintPreview();
       return;
     }
+    if (event.key === "Escape" && (document.fullscreenElement || state.nativeFullscreen)) {
+      event.preventDefault();
+      toggleFullscreen();
+      return;
+    }
     if (pendingCloseChoice && event.key === "Escape") {
       event.preventDefault();
       resolveCloseChoice("cancel");
@@ -569,6 +741,11 @@ function bindEvents() {
       selectAllPages(true);
       return;
     }
+    if (!event.metaKey && !event.ctrlKey && !event.altKey && isPageStepKey(event) && !isTypingTarget(event.target) && !isModalOpen()) {
+      event.preventDefault();
+      stepSelectedPage(event.key === "ArrowUp" || event.key === "PageUp" ? -1 : 1);
+      return;
+    }
     if (isDeleteKey(event) && !isTypingTarget(event.target)) {
       event.preventDefault();
       if (selectedAnnotation()) deleteSelectedAnnotation();
@@ -577,6 +754,7 @@ function bindEvents() {
   }, true);
 
   window.addEventListener("beforeunload", (event) => {
+    if (window.__pdfStudioAllowUnload) return;
     if (!state.documents.some((doc) => doc.dirty)) return;
     event.preventDefault();
     event.returnValue = "";
@@ -713,15 +891,21 @@ function releaseNativeOpenKey(handle) {
 
 window.pdfStudioBeforeAppClose = async () => {
   if (pendingCloseChoice) return false;
+  window.__pdfStudioAllowUnload = false;
   const dirtyDocuments = state.documents.filter((doc) => doc.dirty);
   for (const doc of dirtyDocuments) {
     const choice = await askCloseDirty(doc);
     if (choice === "cancel") return false;
+    if (choice === "discard") {
+      state.documents.forEach((item) => { item.dirty = false; });
+      break;
+    }
     if (choice === "save") {
       const result = await saveDocument(doc);
       if (result === "cancelled" || result === "failed") return false;
     }
   }
+  window.__pdfStudioAllowUnload = true;
   return true;
 };
 
@@ -802,9 +986,10 @@ async function undoLast() {
 }
 
 async function openFiles() {
-  if (window.showOpenFilePicker) {
+  const picker = window.pdfStudioShowOpenFilePicker || window.showOpenFilePicker;
+  if (picker) {
     try {
-      const handles = await window.showOpenFilePicker({
+      const handles = await picker({
         multiple: true,
         types: [
           {
@@ -915,7 +1100,8 @@ async function addFiles(files, options = {}) {
 }
 
 async function addPdf(file, bytes, doc = activeDoc(), onProgress = () => {}) {
-  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;
+  const pdfEngine = await ensurePdfJsReady();
+  const pdf = await pdfEngine.getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;
   const pageCount = pdf.numPages;
   if (!pageCount) throw new Error("文件中没有页面");
   for (let i = 0; i < pageCount; i += 1) {
@@ -1134,12 +1320,13 @@ async function renderTextLayer(page, container, scale) {
   container.replaceChildren();
   if (page.type !== "pdf") return;
   try {
+    const pdfEngine = await ensurePdfJsReady();
     const sourcePage = await page.pdf.getPage(page.sourceIndex + 1);
     const viewport = sourcePage.getViewport({ scale, rotation: normalizeRotation(sourcePage.rotate + page.rotation) });
     container.style.width = `${Math.floor(viewport.width)}px`;
     container.style.height = `${Math.floor(viewport.height)}px`;
-    if (pdfjsLib.TextLayer) {
-      const textLayer = new pdfjsLib.TextLayer({
+    if (pdfEngine.TextLayer) {
+      const textLayer = new pdfEngine.TextLayer({
         textContentSource: sourcePage.streamTextContent(),
         container,
         viewport,
@@ -1149,7 +1336,7 @@ async function renderTextLayer(page, container, scale) {
       return;
     }
     const textContent = await sourcePage.getTextContent();
-    pdfjsLib.renderTextLayer({ textContentSource: textContent, container, viewport });
+    pdfEngine.renderTextLayer({ textContentSource: textContent, container, viewport });
     highlightTextLayer(container, state.search.query);
   } catch (error) {
     container.replaceChildren();
@@ -1208,7 +1395,7 @@ function renderAnnotationLayer(page, container, scale) {
       moveHandle = document.createElement("span");
       moveHandle.className = "annotation-move-handle";
       moveHandle.title = "拖动文字位置";
-      moveHandle.appendChild(lucide.createElement(lucide.icons.Move, { width: 14, height: 14, "stroke-width": 2 }));
+      moveHandle.appendChild(createIcon("Move", { width: 14, height: 14, "stroke-width": 2 }));
       item.appendChild(moveHandle);
     }
 
@@ -2319,7 +2506,7 @@ function setThumbRailCollapsed(collapsed) {
   els.thumbRailToggle.setAttribute("aria-label", els.thumbRailToggle.title);
   els.thumbRailToggle.setAttribute("aria-expanded", String(!collapsed));
   els.thumbRailToggle.innerHTML = `<i data-lucide="${collapsed ? "chevron-right" : "chevron-left"}"></i>`;
-  lucide.createIcons();
+  refreshIcons();
   scheduleFitRenderAfterPanelChange();
 }
 
@@ -2330,7 +2517,7 @@ function setSidePanelCollapsed(collapsed) {
   els.sidePanelToggle.setAttribute("aria-label", els.sidePanelToggle.title);
   els.sidePanelToggle.setAttribute("aria-expanded", String(!collapsed));
   els.sidePanelToggle.innerHTML = `<i data-lucide="${collapsed ? "chevron-left" : "chevron-right"}"></i>`;
-  lucide.createIcons();
+  refreshIcons();
   scheduleFitRenderAfterPanelChange();
 }
 
@@ -2600,6 +2787,30 @@ function isDeleteKey(event) {
     || event.keyCode === 8;
 }
 
+function isPageStepKey(event) {
+  return event.key === "ArrowUp"
+    || event.key === "ArrowDown"
+    || event.key === "PageUp"
+    || event.key === "PageDown";
+}
+
+function isModalOpen() {
+  return [
+    els.closeDialog,
+    els.exportDialog,
+    els.updateDialog,
+    els.uninstallDialog,
+    els.printDialog,
+  ].some((element) => element && !element.classList.contains("hidden"));
+}
+
+function stepSelectedPage(delta) {
+  const doc = activeDoc();
+  if (!doc.pages.length) return;
+  const nextIndex = clamp(doc.selectedIndex + delta, 0, doc.pages.length - 1);
+  selectPage(nextIndex, true, "replace");
+}
+
 function isAcceptedFile(file) {
   return /pdf|png|jpe?g/i.test(file.type) || /\.(pdf|png|jpe?g)$/i.test(file.name);
 }
@@ -2678,9 +2889,10 @@ async function saveAsPdf() {
 }
 
 async function saveBytesWithPicker(bytes, suggestedName) {
-  if (!window.showSaveFilePicker) return "unsupported";
+  const picker = window.pdfStudioShowSaveFilePicker || window.showSaveFilePicker;
+  if (!picker) return "unsupported";
   try {
-    const handle = await window.showSaveFilePicker({
+    const handle = await picker({
       suggestedName,
       types: [{ description: "PDF", accept: { "application/pdf": [".pdf"] } }],
     });
@@ -2766,6 +2978,7 @@ function toggleExportMenu() {
   els.exportMenu.classList.toggle("hidden", !opening);
   els.exportBtn.setAttribute("aria-expanded", String(opening));
   if (opening) {
+    closeOtherMenu();
     const count = selectedPageEntries().length;
     els.exportSelectedMenuLabel.textContent = `导出选中页（${count}）`;
   }
@@ -2796,7 +3009,6 @@ async function confirmExport() {
   const scope = state.exportScope;
   const format = els.exportDialog.querySelector('input[name="exportFormat"]:checked')?.value || "pdf";
   const quality = els.exportDialog.querySelector('input[name="exportQuality"]:checked')?.value || "original";
-  const wordMode = els.exportDialog.querySelector('input[name="wordMode"]:checked')?.value || "fidelity";
   const entries = scope === "selected"
     ? selectedPageEntries()
     : activeDoc().pages.map((page, index) => ({ page, index }));
@@ -2806,7 +3018,7 @@ async function confirmExport() {
   els.exportConfirmBtn.textContent = "正在准备…";
   try {
     closeExportDialog();
-    await exportPageEntries(entries, format, scope, quality, wordMode);
+    await exportPageEntries(entries, format, scope, quality);
   } catch (error) {
     console.error("导出失败", error);
     showToast(format === "docx" ? "Word 转换失败，请重试。" : "导出失败，请重试。");
@@ -2816,13 +3028,13 @@ async function confirmExport() {
   }
 }
 
-async function exportPageEntries(entries, format, scope, quality, wordMode = "fidelity") {
+async function exportPageEntries(entries, format, scope, quality) {
   const fileName = suggestedExportFileName(format, entries);
   if (format === "docx") {
-    showLoading("正在提取页面文字…", 2);
+    showLoading("正在生成可编辑 Word…", 2);
     let wordFile;
     try {
-      wordFile = await buildWordDocument(entries, wordMode);
+      wordFile = await buildWordDocument(entries);
     } finally {
       hideLoading();
     }
@@ -2832,43 +3044,66 @@ async function exportPageEntries(entries, format, scope, quality, wordMode = "fi
   }
 
   if (format === "pdf") {
-    const pages = entries.map(({ page }) => page);
-    const bytes = quality === "original" ? await buildPdfBytes(pages) : await buildCompressedPdfBytes(pages, quality);
-    const result = await saveExportData(bytes, fileName, "application/pdf", ".pdf", "PDF 文档");
-    if (result === "saved") showToast("PDF 已导出。");
-    return result;
+    showLoading("正在导出 PDF…", 2);
+    try {
+      const pages = entries.map(({ page }) => page);
+      const bytes = quality === "original"
+        ? await buildPdfBytes(pages, (completed, total) => updateLoading(`正在整理第 ${completed} / ${total} 页`, 5 + (completed / total) * 82))
+        : await buildCompressedPdfBytes(pages, quality, (completed, total) => updateLoading(`正在压缩第 ${completed} / ${total} 页`, 5 + (completed / total) * 82));
+      updateLoading("正在打开保存窗口…", 92);
+      const result = await saveExportData(bytes, fileName, "application/pdf", ".pdf", "PDF 文档");
+      if (result === "saved") showToast("PDF 已导出。");
+      return result;
+    } finally {
+      hideLoading("PDF 导出完成");
+    }
   }
 
   const ext = format === "jpeg" ? "jpg" : "png";
   const mime = format === "jpeg" ? "image/jpeg" : "image/png";
+  showLoading(`正在导出 ${ext.toUpperCase()}…`, 2);
   if (entries.length === 1) {
-    const blob = await pageImageBlob(entries[0].page, format, quality);
-    const result = await saveExportData(blob, fileName, mime, `.${ext}`, `${ext.toUpperCase()} 图片`);
-    if (result === "saved") showToast(`${ext.toUpperCase()} 已导出。`);
-    return result;
+    try {
+      updateLoading("正在生成图片…", 45);
+      const blob = await pageImageBlob(entries[0].page, format, quality);
+      updateLoading("正在打开保存窗口…", 92);
+      const result = await saveExportData(blob, fileName, mime, `.${ext}`, `${ext.toUpperCase()} 图片`);
+      if (result === "saved") showToast(`${ext.toUpperCase()} 已导出。`);
+      return result;
+    } finally {
+      hideLoading(`${ext.toUpperCase()} 导出完成`);
+    }
   }
 
-  showToast("正在整理图片，请稍等。");
-  const files = [];
-  for (const { page, index } of entries) {
-    const blob = await pageImageBlob(page, format, quality);
-    files.push({
-      name: `page-${String(index + 1).padStart(3, "0")}.${ext}`,
-      bytes: new Uint8Array(await blob.arrayBuffer()),
-      mime,
-    });
+  try {
+    const files = [];
+    for (let i = 0; i < entries.length; i += 1) {
+      const { page, index } = entries[i];
+      updateLoading(`正在生成第 ${i + 1} / ${entries.length} 张图片`, 5 + ((i + 1) / entries.length) * 76);
+      const blob = await pageImageBlob(page, format, quality);
+      files.push({
+        name: `page-${String(index + 1).padStart(3, "0")}.${ext}`,
+        bytes: new Uint8Array(await blob.arrayBuffer()),
+        mime,
+      });
+    }
+    updateLoading("正在打包图片…", 86);
+    const zip = makeZip(files);
+    updateLoading("正在打开保存窗口…", 94);
+    const result = await saveExportData(zip, fileName, "application/zip", ".zip", "ZIP 压缩包");
+    if (result === "saved") showToast(`${entries.length} 页图片已导出。`);
+    return result;
+  } finally {
+    hideLoading(`${ext.toUpperCase()} 导出完成`);
   }
-  const zip = makeZip(files);
-  const result = await saveExportData(zip, fileName, "application/zip", ".zip", "ZIP 压缩包");
-  if (result === "saved") showToast(`${entries.length} 页图片已导出。`);
-  return result;
 }
 
 async function saveExportData(data, suggestedName, mime, extension, description) {
   const blob = data instanceof Blob ? data : new Blob([data], { type: mime });
-  if (window.showSaveFilePicker) {
+  const picker = window.pdfStudioShowSaveFilePicker || window.showSaveFilePicker;
+  if (picker) {
     try {
-      const handle = await window.showSaveFilePicker({
+      const handle = await picker({
         suggestedName,
         types: [{ description, accept: { [mime]: [extension] } }],
       });
@@ -2904,9 +3139,8 @@ function syncExportFormatControls() {
   const format = els.exportDialog.querySelector('input[name="exportFormat"]:checked')?.value || "pdf";
   const isWord = format === "docx";
   els.exportQualityGroup.classList.toggle("hidden", isWord);
-  els.wordModeGroup.classList.toggle("hidden", !isWord);
   els.exportDialogNote.textContent = isWord
-    ? "默认“保留原版式”会把每页以高清版式放入 Word，间距、字号、颜色和排版最接近原 PDF；“可编辑文字”适合继续修改。"
+    ? "将生成可编辑 Word，并尽量保留原 PDF 的行距、字号、缩进和排版；图片页会以图片保留版式。"
     : "预估大小会因页面内容有所浮动。下一步可在系统窗口中填写文件名并选择保存位置；多张图片会保存为 ZIP。";
   els.exportConfirmBtn.textContent = isWord ? "转换并保存" : "下一步";
 }
@@ -3034,37 +3268,597 @@ async function exportAllPdf() {
 
 async function printFullPdf() {
   if (!activeDoc().pages.length) return showToast("请先加入文件。");
-  showLoading("正在准备打印预览…", 2);
+  closeExportMenu();
+  closeOtherMenu();
+  if (state.print.desktop) {
+    openPrintCenter();
+    return;
+  }
+  if (state.print.native && window.pdfStudioNativePrintHtml) {
+    printWithNativeHtml();
+    return;
+  }
+  printWithBrowser();
+}
+
+async function printWithBrowser() {
+  const printWindow = openBrowserPrintWindow();
+  const job = { cancelled: false };
+  showLoading("正在准备打印…", 2, {
+    onCancel: () => {
+      job.cancelled = true;
+      try { printWindow?.close(); } catch {}
+      hideLoading("已取消打印");
+    },
+  });
   try {
-    const bytes = await buildPdfBytes(activeDoc().pages, (completed, total) => {
-      updateLoading(`正在准备第 ${completed} / ${total} 页`, 5 + (completed / total) * 88);
-    });
-    closePrintPreview();
-    printPreviewUrl = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-    els.printPreviewFrame.src = printPreviewUrl;
-    els.printPageSummary.textContent = `${activeDoc().pages.length} 页`;
-    els.printDialog.classList.remove("hidden");
-    els.printConfirmBtn.focus();
+    if (printWindow && !printWindow.closed) {
+      const html = await buildPrintableHtml(activeDoc().pages, (completed, total) => {
+        updateLoading(`正在准备第 ${completed} / ${total} 页`, 5 + (completed / total) * 88);
+      }, job);
+      ensurePrintNotCancelled(job);
+      printHtmlInWindow(printWindow, html);
+    } else {
+      throw new Error("打印窗口被拦截。");
+    }
   } catch (error) {
     console.error(error);
-    showToast("无法生成打印预览，请重试。");
+    if (!job.cancelled) showToast(error.message || "无法打开打印，请重试。");
   } finally {
-    hideLoading("打印预览已准备");
+    if (!job.cancelled) hideLoading("打印窗口已打开");
   }
 }
 
-function printPreviewDocument() {
-  const target = els.printPreviewFrame.contentWindow;
-  if (!target) return showToast("打印预览尚未准备好。");
-  target.focus();
-  target.print();
+async function printWithNativeHtml() {
+  const job = { cancelled: false };
+  showLoading("正在准备打印…", 2, {
+    onCancel: () => {
+      job.cancelled = true;
+      hideLoading("已取消打印");
+    },
+  });
+  try {
+    const html = await buildPrintableHtml(activeDoc().pages, (completed, total) => {
+      updateLoading(`正在准备第 ${completed} / ${total} 页`, 5 + (completed / total) * 88);
+    }, job);
+    ensurePrintNotCancelled(job);
+    updateLoading("正在打开打印窗口…", 96);
+    const result = await window.pdfStudioNativePrintHtml(html);
+    if (!result?.ok) throw new Error(result?.message || "打印已取消。");
+    showToast("打印窗口已打开。");
+  } catch (error) {
+    if (!job.cancelled) showToast(error.message || "无法打开打印，请重试。");
+  } finally {
+    if (!job.cancelled) hideLoading("打印处理完成");
+  }
+}
+
+function openBrowserPrintWindow() {
+  try {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return null;
+    printWindow.document.open();
+    printWindow.document.write(`
+      <!doctype html>
+      <html lang="zh-CN">
+        <head>
+          <meta charset="utf-8">
+          <title>PDF大编辑 - 打印</title>
+          <style>
+            body { margin: 0; display: grid; min-height: 100vh; place-items: center; font: 16px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #25272d; background: #f5f6f8; }
+          </style>
+        </head>
+        <body>正在准备打印...</body>
+      </html>
+    `);
+    printWindow.document.close();
+    return printWindow;
+  } catch (error) {
+    console.warn("无法打开打印窗口", error);
+    return null;
+  }
+}
+
+function ensurePrintNotCancelled(job) {
+  if (job?.cancelled) throw new DOMException("已取消打印", "AbortError");
+}
+
+async function buildPrintableHtml(pages, onProgress, job) {
+  const rendered = [];
+  for (let index = 0; index < pages.length; index += 1) {
+    ensurePrintNotCancelled(job);
+    const page = pages[index];
+    const dimensions = visualPageDimensions(page);
+    const maxSide = 1900;
+    const scale = clamp(Math.min(2, maxSide / Math.max(dimensions.width, dimensions.height)), 0.35, 2);
+    const canvas = document.createElement("canvas");
+    await renderPageToCanvas(page, canvas, scale, { includeAnnotations: true, pixelRatio: 1 });
+    ensurePrintNotCancelled(job);
+    rendered.push({
+      index: index + 1,
+      width: dimensions.width,
+      height: dimensions.height,
+      dataUrl: canvas.toDataURL("image/jpeg", 0.92),
+    });
+    onProgress(index + 1, pages.length);
+    if (index % 2 === 1) await wait(0);
+  }
+  const pagesHtml = rendered.map((page) => `
+    <section class="print-page" style="--page-ratio: ${page.width} / ${page.height};">
+      <img src="${page.dataUrl}" alt="第 ${page.index} 页">
+    </section>
+  `).join("");
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>PDF大编辑 - 打印</title>
+  <style>
+    html, body { margin: 0; background: #ffffff; }
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .print-page {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100vw;
+      min-height: 100vh;
+      break-after: page;
+      page-break-after: always;
+      background: #ffffff;
+      overflow: hidden;
+    }
+    .print-page:last-child { break-after: auto; page-break-after: auto; }
+    .print-page img {
+      display: block;
+      max-width: 100%;
+      max-height: 100vh;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+    }
+    @page { margin: 0; }
+    @media screen {
+      body { background: #d7dbe1; }
+      .print-page {
+        width: min(100vw - 48px, 1200px);
+        min-height: min(100vh - 48px, 900px);
+        margin: 24px auto;
+        box-shadow: 0 8px 28px rgba(0,0,0,.24);
+      }
+    }
+  </style>
+</head>
+<body>
+${pagesHtml}
+<script>
+  window.addEventListener("load", () => {
+    setTimeout(() => {
+      window.focus();
+      window.print();
+    }, 250);
+  });
+</script>
+</body>
+</html>`;
+}
+
+function printHtmlInWindow(printWindow, html) {
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
+
+async function openPrintCenter() {
+  closePrintPreview();
+  state.print.previewToken += 1;
+  state.print.previewPage = 1;
+  state.print.previewZoom = "fit";
+  els.printDialog.classList.remove("hidden");
+  els.printStatusText.textContent = "正在读取打印机…";
+  els.printConfirmBtn.disabled = true;
+  els.advancedPrintBtn.disabled = true;
+  applyPrintPreferencesToForm(state.print.preferences || {});
+  updatePrintSettingsVisibility();
+  await refreshPrinters();
+  refreshPrintSummary();
+}
+
+async function refreshPrinters() {
+  if (!window.pdfStudioGetPrinters) return;
+  els.refreshPrintersBtn.disabled = true;
+  try {
+    const result = await window.pdfStudioGetPrinters();
+    state.print.printers = result?.printers || [];
+    state.print.preferences = result?.preferences || state.print.preferences || {};
+    renderPrinterOptions();
+    applyPrintPreferencesToForm(state.print.preferences);
+    els.printerStatus.textContent = state.print.printers.length
+      ? "已读取系统打印机。默认打印机会标记在名称后。"
+      : "没有读取到打印机，请确认系统中已安装打印机。";
+  } catch (error) {
+    els.printerStatus.textContent = "读取打印机失败，请稍后重试。";
+  } finally {
+    els.refreshPrintersBtn.disabled = false;
+  }
+}
+
+function renderPrinterOptions() {
+  els.printerSelect.innerHTML = "";
+  if (!state.print.printers.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "没有可用打印机";
+    els.printerSelect.appendChild(option);
+    return;
+  }
+  state.print.printers.forEach((printer) => {
+    const option = document.createElement("option");
+    option.value = printer.name;
+    option.textContent = `${printer.displayName || printer.name}${printer.isDefault ? "（默认）" : ""}`;
+    option.title = printer.name;
+    els.printerSelect.appendChild(option);
+  });
+  const preferred = state.print.preferences?.printerName;
+  const defaultPrinter = state.print.printers.find((printer) => printer.isDefault) || state.print.printers[0];
+  els.printerSelect.value = state.print.printers.some((printer) => printer.name === preferred)
+    ? preferred
+    : defaultPrinter?.name || "";
+}
+
+function applyPrintPreferencesToForm(preferences = {}) {
+  setSelectValue(els.paperSelect, preferences.paper || "default");
+  setSelectValue(els.orientationSelect, preferences.orientation || "auto");
+  setSelectValue(els.colorSelect, preferences.color || "color");
+  setSelectValue(els.duplexSelect, preferences.duplex || "simplex");
+  setSelectValue(els.scaleSelect, preferences.scaleMode || "fit");
+  setSelectValue(els.marginSelect, preferences.marginMode || "default");
+  setSelectValue(els.pagesPerSheetSelect, String(preferences.pagesPerSheet || 1));
+  setSelectValue(els.dpiSelect, preferences.dpi || "default");
+  els.scalePercentInput.value = preferences.scalePercent || 100;
+  els.printBackgroundInput.checked = preferences.printBackground !== false;
+  const margins = preferences.margins || {};
+  els.marginTopInput.value = margins.top ?? 10;
+  els.marginRightInput.value = margins.right ?? 10;
+  els.marginBottomInput.value = margins.bottom ?? 10;
+  els.marginLeftInput.value = margins.left ?? 10;
+  if (preferences.printerName && [...els.printerSelect.options].some((option) => option.value === preferences.printerName)) {
+    els.printerSelect.value = preferences.printerName;
+  }
+  updatePrintSettingsVisibility();
+}
+
+function setSelectValue(select, value) {
+  if ([...select.options].some((option) => option.value === String(value))) select.value = String(value);
+}
+
+function handlePrintSettingsChange() {
+  updatePrintSettingsVisibility();
+  refreshPrintSummary();
+}
+
+function updatePrintSettingsVisibility() {
+  const customRange = els.printRangeSelect.value === "custom";
+  els.customRangeInput.classList.toggle("hidden", !customRange);
+  els.scalePercentInput.disabled = els.scaleSelect.value !== "custom";
+  els.customMargins.classList.toggle("hidden", els.marginSelect.value !== "custom");
+  const selectedPrinter = state.print.printers.find((printer) => printer.name === els.printerSelect.value);
+  const duplexKnownUnsupported = selectedPrinter && selectedPrinter.duplexSupported === false;
+  els.duplexSelect.disabled = Boolean(duplexKnownUnsupported);
+  if (duplexKnownUnsupported) els.duplexSelect.value = "simplex";
+}
+
+function collectPrintSettings() {
+  const entries = printEntriesForRange();
+  const settings = {
+    printerName: els.printerSelect.value,
+    rangeMode: els.printRangeSelect.value,
+    customRange: els.customRangeInput.value.trim(),
+    copies: clamp(Number(els.copiesInput.value) || 1, 1, 999),
+    collate: els.collateInput.checked,
+    paper: els.paperSelect.value,
+    orientation: els.orientationSelect.value,
+    color: els.colorSelect.value,
+    duplex: els.duplexSelect.value,
+    scaleMode: els.scaleSelect.value,
+    scalePercent: clamp(Number(els.scalePercentInput.value) || 100, 10, 400),
+    pagesPerSheet: Number(els.pagesPerSheetSelect.value) || 1,
+    marginMode: els.marginSelect.value,
+    margins: {
+      top: clamp(Number(els.marginTopInput.value) || 0, 0, 100),
+      right: clamp(Number(els.marginRightInput.value) || 0, 0, 100),
+      bottom: clamp(Number(els.marginBottomInput.value) || 0, 0, 100),
+      left: clamp(Number(els.marginLeftInput.value) || 0, 0, 100),
+    },
+    printBackground: els.printBackgroundInput.checked,
+    dpi: els.dpiSelect.value,
+  };
+  if (settings.orientation === "auto" && entries.length) {
+    const dimensions = visualPageDimensions(entries[0].page);
+    settings.orientation = dimensions.width > dimensions.height ? "landscape" : "portrait";
+  }
+  settings.previewScale = settings.scaleMode === "custom" ? settings.scalePercent : 100;
+  return { settings, entries };
+}
+
+function printEntriesForRange() {
+  const doc = activeDoc();
+  if (!doc.pages.length) return [];
+  const mode = els.printRangeSelect.value;
+  if (mode === "current") return [{ page: currentPage(), index: doc.selectedIndex }];
+  if (mode === "selected") return selectedPageEntries();
+  if (mode === "custom") return parsePageRange(els.customRangeInput.value, doc.pages);
+  return doc.pages.map((page, index) => ({ page, index }));
+}
+
+function parsePageRange(value, pages) {
+  const input = value.trim();
+  if (!input) throw new Error("请输入自定义页面范围。");
+  const seen = new Set();
+  const entries = [];
+  for (const part of input.split(",")) {
+    const token = part.trim();
+    if (!token) throw new Error("页面范围格式不正确。");
+    const match = token.match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+    if (!match) throw new Error("页面范围格式不正确，请使用 1-3,6,8-10。");
+    const start = Number(match[1]);
+    const end = Number(match[2] || match[1]);
+    if (start < 1 || end < 1 || start > pages.length || end > pages.length) throw new Error("页面范围超出文档页数。");
+    if (start > end) throw new Error("页面范围起始页不能大于结束页。");
+    for (let pageNumber = start; pageNumber <= end; pageNumber += 1) {
+      if (seen.has(pageNumber)) throw new Error(`页面 ${pageNumber} 被重复选择。`);
+      seen.add(pageNumber);
+      entries.push({ page: pages[pageNumber - 1], index: pageNumber - 1 });
+    }
+  }
+  return entries;
+}
+
+function validatePrintSettings(settings, entries, requirePrinter = true) {
+  if (!entries.length) return "没有可打印页面。";
+  if (requirePrinter && !settings.printerName && state.print.desktop) return "请先选择打印机。";
+  if (!Number.isFinite(settings.copies) || settings.copies < 1) return "份数必须大于 0。";
+  if (settings.scaleMode === "custom" && (settings.scalePercent < 10 || settings.scalePercent > 400)) return "自定义缩放范围应在 10% 到 400% 之间。";
+  return "";
+}
+
+function refreshPrintSummary() {
+  try {
+    const { settings, entries } = collectPrintSettings();
+    const validation = validatePrintSettings(settings, entries);
+    state.print.settings = settings;
+    state.print.pageEntries = entries;
+    els.printPageSummary.textContent = `${entries.length} 页`;
+    els.printRangeHint.textContent = `预计打印 ${entries.length} 页`;
+    els.printPreviewPage.textContent = "预览将在系统打印窗口中显示";
+    els.printStatusText.textContent = validation || "设置完成后点击“打印”。";
+    els.printConfirmBtn.disabled = Boolean(validation);
+    els.advancedPrintBtn.disabled = false;
+  } catch (error) {
+    els.printStatusText.textContent = error.message || "打印设置有误。";
+    els.printConfirmBtn.disabled = true;
+    els.advancedPrintBtn.disabled = false;
+  }
+}
+
+function schedulePrintPreviewUpdate(delay = 360) {
+  clearTimeout(printPreviewTimer);
+  printPreviewTimer = setTimeout(updatePrintPreview, delay);
+}
+
+async function updatePrintPreview() {
+  if (!state.print.desktop || els.printDialog.classList.contains("hidden")) return;
+  const token = ++state.print.previewToken;
+  let settings;
+  let entries;
+  try {
+    ({ settings, entries } = collectPrintSettings());
+    state.print.settings = settings;
+    state.print.pageEntries = entries;
+    const validation = validatePrintSettings(settings, entries);
+    els.printPageSummary.textContent = `${entries.length} 页`;
+    els.printRangeHint.textContent = `预计打印 ${entries.length} 页`;
+    if (validation) throw new Error(validation);
+    els.printPreviewLoading.classList.remove("hidden");
+    els.printStatusText.textContent = "正在生成打印预览…";
+    els.printConfirmBtn.disabled = true;
+    els.advancedPrintBtn.disabled = true;
+    const bytes = await buildPdfBytes(entries.map(({ page }) => page), (completed, total) => {
+      if (token === state.print.previewToken) els.printStatusText.textContent = `正在准备第 ${completed} / ${total} 页…`;
+    });
+    if (token !== state.print.previewToken) return;
+    const result = await window.pdfStudioPrintPreview(bytes, settings);
+    if (token !== state.print.previewToken) return;
+    if (!result?.ok) throw new Error(result?.message || "打印预览生成失败。");
+    state.print.previewPdf = result.data;
+    showPrintPreviewPdf(result.data);
+    await window.pdfStudioSavePrintPreferences?.(settings);
+    els.printStatusText.textContent = "预览已更新。";
+    els.printConfirmBtn.disabled = false;
+    els.advancedPrintBtn.disabled = false;
+  } catch (error) {
+    if (token !== state.print.previewToken) return;
+    els.printStatusText.textContent = error.message || "打印预览生成失败。";
+    els.printConfirmBtn.disabled = true;
+    els.advancedPrintBtn.disabled = false;
+  } finally {
+    if (token === state.print.previewToken) els.printPreviewLoading.classList.add("hidden");
+  }
+}
+
+function showPrintPreviewPdf(data) {
+  if (printPreviewUrl) URL.revokeObjectURL(printPreviewUrl);
+  const blob = new Blob([data], { type: "application/pdf" });
+  printPreviewUrl = URL.createObjectURL(blob);
+  els.printPreviewFrame.src = `${printPreviewUrl}#toolbar=0&navpanes=0&view=Fit`;
+  state.print.previewPage = 1;
+  els.printPreviewPage.textContent = `1 / ${state.print.pageEntries.length || 1}`;
+}
+
+function movePrintPreviewPage(delta) {
+  const total = Math.max(1, state.print.pageEntries.length);
+  state.print.previewPage = clamp(state.print.previewPage + delta, 1, total);
+  if (printPreviewUrl) els.printPreviewFrame.src = `${printPreviewUrl}#page=${state.print.previewPage}&toolbar=0&navpanes=0`;
+  els.printPreviewPage.textContent = `${state.print.previewPage} / ${total}`;
+}
+
+function setPrintPreviewZoom(delta) {
+  const current = typeof state.print.previewZoom === "number" ? state.print.previewZoom : 1;
+  state.print.previewZoom = clamp(current + delta, 0.25, 3);
+  if (printPreviewUrl) els.printPreviewFrame.src = `${printPreviewUrl}#page=${state.print.previewPage}&zoom=${Math.round(state.print.previewZoom * 100)}&toolbar=0&navpanes=0`;
+}
+
+function setPrintPreviewMode(mode) {
+  state.print.previewZoom = mode;
+  const view = mode === "width" ? "FitH" : "Fit";
+  if (printPreviewUrl) els.printPreviewFrame.src = `${printPreviewUrl}#page=${state.print.previewPage}&view=${view}&toolbar=0&navpanes=0`;
+}
+
+async function finalPrintBytesFromSettings(requirePrinter = true, job = null) {
+  const { settings, entries } = collectPrintSettings();
+  const validation = validatePrintSettings(settings, entries, requirePrinter);
+  if (validation) throw new Error(validation);
+  const bytes = await buildPdfBytes(entries.map(({ page }) => page), (completed, total) => {
+    ensurePrintNotCancelled(job);
+    updateLoading(`正在准备第 ${completed} / ${total} 页`, 5 + (completed / total) * 70);
+  });
+  ensurePrintNotCancelled(job);
+  return { bytes, settings, entries };
+}
+
+function withTimeout(promise, ms, message) {
+  let timer;
+  return Promise.race([
+    promise.finally(() => clearTimeout(timer)),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), ms);
+    }),
+  ]);
+}
+
+async function submitPrintJob() {
+  if (state.print.submitting) return;
+  const job = { cancelled: false };
+  state.print.submitting = true;
+  els.printConfirmBtn.disabled = true;
+  showLoading("正在发送打印任务…", 5, {
+    onCancel: () => {
+      job.cancelled = true;
+      window.pdfStudioCancelPrint?.();
+      hideLoading("已取消打印");
+    },
+  });
+  try {
+    const { bytes, settings } = await finalPrintBytesFromSettings(true, job);
+    updateLoading("正在发送到打印机…", 88);
+    const result = await withTimeout(
+      window.pdfStudioPrintDocument(bytes, settings),
+      45000,
+      "打印响应超时，已停止等待。请检查系统打印窗口或打印机状态。",
+    );
+    if (!result?.ok) throw new Error(result?.message || "打印任务失败。");
+    showToast("打印任务已发送。");
+    closePrintPreview();
+  } catch (error) {
+    if (!job.cancelled) showToast(error.message || "打印失败，请重试。");
+    els.printStatusText.textContent = job.cancelled ? "已取消打印。" : (error.message || "打印失败，请重试。");
+  } finally {
+    state.print.submitting = false;
+    els.printConfirmBtn.disabled = false;
+    if (!job.cancelled) hideLoading("打印处理完成");
+  }
+}
+
+async function submitAdvancedPrintJob() {
+  if (state.print.submitting) return;
+  const job = { cancelled: false };
+  state.print.submitting = true;
+  els.advancedPrintBtn.disabled = true;
+  showLoading("正在打开系统高级打印…", 5, {
+    onCancel: () => {
+      job.cancelled = true;
+      window.pdfStudioCancelPrint?.();
+      hideLoading("已取消打印");
+    },
+  });
+  try {
+    const { bytes, settings } = await finalPrintBytesFromSettings(false, job);
+    const result = await withTimeout(
+      window.pdfStudioAdvancedPrint(bytes, settings),
+      45000,
+      "打印响应超时，已停止等待。请检查系统打印窗口或打印机状态。",
+    );
+    if (!result?.ok) throw new Error(result?.message || "系统高级打印已取消或失败。");
+    showToast("打印任务已发送。");
+    closePrintPreview();
+  } catch (error) {
+    if (!job.cancelled) showToast(error.message || "无法打开系统高级打印。");
+    els.printStatusText.textContent = job.cancelled ? "已取消打印。" : (error.message || "无法打开系统高级打印。");
+  } finally {
+    state.print.submitting = false;
+    els.advancedPrintBtn.disabled = false;
+    if (!job.cancelled) hideLoading("打印处理完成");
+  }
+}
+
+function printPdfUrl(url) {
+  return new Promise((resolve, reject) => {
+    const frame = document.createElement("iframe");
+    let settled = false;
+    const revoke = () => {
+      frame.remove();
+      if (printPreviewUrl === url) {
+        URL.revokeObjectURL(printPreviewUrl);
+        printPreviewUrl = null;
+      }
+    };
+    const cleanup = () => {
+      if (settled) return;
+      settled = true;
+      setTimeout(revoke, 1000);
+      resolve();
+    };
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      revoke();
+      reject(error);
+    };
+    frame.style.position = "fixed";
+    frame.style.right = "0";
+    frame.style.bottom = "0";
+    frame.style.width = "1px";
+    frame.style.height = "1px";
+    frame.style.border = "0";
+    frame.style.opacity = "0";
+    frame.style.pointerEvents = "none";
+    frame.onload = () => {
+      setTimeout(() => {
+        try {
+          frame.contentWindow.focus();
+          frame.contentWindow.onafterprint = cleanup;
+          frame.contentWindow.print();
+          setTimeout(cleanup, 60000);
+        } catch (error) {
+          fail(error);
+        }
+      }, 250);
+    };
+    frame.onerror = () => fail(new Error("打印文件载入失败"));
+    frame.src = url;
+    document.body.appendChild(frame);
+  });
 }
 
 function closePrintPreview() {
+  clearTimeout(printPreviewTimer);
+  state.print.previewToken += 1;
   els.printDialog.classList.add("hidden");
   els.printPreviewFrame.removeAttribute("src");
   if (printPreviewUrl) URL.revokeObjectURL(printPreviewUrl);
   printPreviewUrl = null;
+  state.print.previewPdf = null;
+  state.print.pageEntries = [];
+  els.printPreviewLoading.classList.add("hidden");
 }
 
 async function exportSelectedPagePdf() {
@@ -3132,10 +3926,12 @@ function quantizeCanvasColors(canvas, step) {
   context.putImageData(image, 0, 0);
 }
 
-async function buildCompressedPdfBytes(pages, quality = "balanced") {
+async function buildCompressedPdfBytes(pages, quality = "balanced", onProgress = () => {}) {
+  requirePdfLib();
   const profile = EXPORT_QUALITY_PROFILES[quality] || EXPORT_QUALITY_PROFILES.balanced;
   const out = await PDFDocument.create();
-  for (const page of pages) {
+  for (let index = 0; index < pages.length; index += 1) {
+    const page = pages[index];
     const canvas = document.createElement("canvas");
     const renderScale = page.type === "image" ? profile.imageScale : profile.pdfScale;
     await renderPageToCanvas(page, canvas, renderScale, { includeAnnotations: true, pixelRatio: 1 });
@@ -3147,11 +3943,13 @@ async function buildCompressedPdfBytes(pages, quality = "balanced") {
     };
     const pdfPage = out.addPage([dimensions.width, dimensions.height]);
     pdfPage.drawImage(image, { x: 0, y: 0, width: dimensions.width, height: dimensions.height });
+    onProgress(index + 1, pages.length);
   }
   return out.save({ useObjectStreams: true });
 }
 
 async function buildPdfBytes(pages, onProgress = () => {}) {
+  requirePdfLib();
   const out = await PDFDocument.create();
   for (let index = 0; index < pages.length; index += 1) {
     const page = pages[index];
@@ -3350,6 +4148,8 @@ function imagePlacement(page) {
 
 async function maybeLoadDemo() {
   if (!new URLSearchParams(location.search).has("demo")) return;
+  requirePdfLib();
+  const pdfLib = globalThis.PDFLib || {};
   const demoPdf = await PDFDocument.create();
   const colors = [
     [0.79, 0.3, 0.21],
@@ -3358,9 +4158,9 @@ async function maybeLoadDemo() {
   ];
   colors.forEach((color, index) => {
     const page = demoPdf.addPage([595, 842]);
-    page.drawRectangle({ x: 54, y: 672, width: 487, height: 92, color: PDFLib.rgb(...color) });
-    page.drawText(`Demo PDF Page ${index + 1}`, { x: 72, y: 704, size: 28, color: PDFLib.rgb(0.1, 0.1, 0.12) });
-    page.drawText("PDF Studio render test", { x: 72, y: 626, size: 14, color: PDFLib.rgb(0.25, 0.26, 0.3) });
+    page.drawRectangle({ x: 54, y: 672, width: 487, height: 92, color: pdfLib.rgb(...color) });
+    page.drawText(`Demo PDF Page ${index + 1}`, { x: 72, y: 704, size: 28, color: pdfLib.rgb(0.1, 0.1, 0.12) });
+    page.drawText("PDF Studio render test", { x: 72, y: 626, size: 14, color: pdfLib.rgb(0.25, 0.26, 0.3) });
   });
   await addPdf(new File([await demoPdf.save()], "demo.pdf", { type: "application/pdf" }), await demoPdf.save());
 
@@ -3651,12 +4451,12 @@ function updateUi() {
     els.selectAllBtn,
     els.exportAllMenuBtn,
     els.exportSelectedMenuBtn,
-  ].forEach((button) => {
+  ].filter(Boolean).forEach((button) => {
     button.disabled = !hasPage;
   });
 }
 
-async function buildWordDocument(entries, mode = "fidelity") {
+async function buildWordDocument(entries) {
   const encoder = new TextEncoder();
   const mediaFiles = [];
   const imageRelationships = [];
@@ -3668,7 +4468,7 @@ async function buildWordDocument(entries, mode = "fidelity") {
     updateLoading(`正在转换第 ${position + 1} / ${entries.length} 页`, 5 + ((position + 1) / entries.length) * 86);
     const textLines = await extractWordTextLines(page);
     const editableCharacters = textLines.reduce((total, line) => total + line.text.replace(/\s/g, "").length, 0);
-    const usePageImage = mode === "fidelity" || page.type === "image" || editableCharacters < 8;
+    const usePageImage = page.type === "image" || editableCharacters < 8;
 
     if (usePageImage) {
       imageId += 1;
@@ -3679,16 +4479,22 @@ async function buildWordDocument(entries, mode = "fidelity") {
       imageRelationships.push(
         `<Relationship Id="${relationshipId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${fileName}"/>`,
       );
-      const hiddenText = mode === "fidelity" ? textLines.map((line) => line.text).join("\n") : "";
-      bodyParts.push(wordImageParagraphXml(relationshipId, image.width, image.height, imageId, index + 1, hiddenText));
+      bodyParts.push(wordImageParagraphXml(relationshipId, image.width, image.height, imageId, index + 1));
     } else {
       const medianSize = median(textLines.map((line) => line.fontSize).filter(Boolean)) || 11;
-      textLines.forEach((line) => {
-        bodyParts.push(wordParagraphXml(line.text, {
-          fontSize: line.fontSize,
-          bold: line.bold || (line.fontSize > medianSize * 1.28 && line.text.length < 100),
-          after: line.after,
-        }));
+      groupWordLines(textLines).forEach((block) => {
+        if (block.type === "table") {
+          bodyParts.push(wordTableXml(block.lines));
+          return;
+        }
+        block.lines.forEach((line) => {
+          bodyParts.push(wordParagraphXml(line.text, {
+            fontSize: line.fontSize,
+            bold: line.bold || (line.fontSize > medianSize * 1.28 && line.text.length < 100),
+            after: line.after,
+            indent: line.indent,
+          }));
+        });
       });
       wordAnnotationParagraphs(page).forEach((paragraph) => bodyParts.push(paragraph));
     }
@@ -3826,11 +4632,15 @@ async function extractWordTextLines(page) {
       const fontSize = median(line.items.map((item) => item.fontSize)) || 11;
       const nextLine = lines[lineIndex + 1];
       const verticalGap = nextLine ? Math.abs(line.y - nextLine.y) : fontSize;
+      const minX = Math.max(0, Math.min(...line.items.map((item) => item.x || 0)));
+      const usableTwips = 10200;
       return {
         text,
+        cells: text.split("\t").map((cell) => cell.trim()).filter(Boolean),
         fontSize: clamp(fontSize, 8, 36),
         bold: line.items.filter((item) => item.bold).length > line.items.length / 2,
         after: verticalGap > fontSize * 1.75 ? 180 : 45,
+        indent: clamp(Math.round((minX / Math.max(1, page.width)) * usableTwips), 0, 9000),
       };
     }).filter((line) => line.text.trim());
   } catch (error) {
@@ -3898,12 +4708,38 @@ async function renderWordPageImage(page) {
   };
 }
 
+function groupWordLines(lines) {
+  const blocks = [];
+  let tableLines = [];
+  const flushTable = () => {
+    if (tableLines.length >= 2) {
+      blocks.push({ type: "table", lines: tableLines });
+    } else if (tableLines.length) {
+      blocks.push({ type: "paragraphs", lines: tableLines });
+    }
+    tableLines = [];
+  };
+
+  lines.forEach((line) => {
+    const looksTabular = line.cells?.length >= 2 && line.text.includes("\t");
+    if (looksTabular) {
+      tableLines.push(line);
+      return;
+    }
+    flushTable();
+    blocks.push({ type: "paragraphs", lines: [line] });
+  });
+  flushTable();
+  return blocks;
+}
+
 function wordParagraphXml(text, options = {}) {
   const fontSize = clamp(Number(options.fontSize) || 11, 6, 72);
   const halfPoints = Math.round(fontSize * 2);
   const fontFamily = wordXmlEscape(options.fontFamily || "Arial");
   const color = String(options.color || "#202124").replace("#", "").toUpperCase();
   const align = ["left", "center", "right"].includes(options.align) ? options.align : "left";
+  const indent = Math.max(0, Math.round(Number(options.indent) || 0));
   const runProperties = [
     `<w:rFonts w:ascii="${fontFamily}" w:hAnsi="${fontFamily}" w:eastAsia="${fontFamily}"/>`,
     `<w:sz w:val="${halfPoints}"/><w:szCs w:val="${halfPoints}"/>`,
@@ -3916,7 +4752,23 @@ function wordParagraphXml(text, options = {}) {
     const tab = index ? "<w:tab/>" : "";
     return `<w:r><w:rPr>${runProperties}</w:rPr>${tab}<w:t xml:space="preserve">${wordXmlEscape(part)}</w:t></w:r>`;
   }).join("");
-  return `<w:p><w:pPr><w:jc w:val="${align}"/><w:spacing w:after="${Math.max(0, Math.round(options.after ?? 80))}" w:line="${Math.max(240, Math.round(fontSize * 25))}" w:lineRule="auto"/></w:pPr>${runs || "<w:r><w:t></w:t></w:r>"}</w:p>`;
+  return `<w:p><w:pPr><w:jc w:val="${align}"/>${indent ? `<w:ind w:left="${indent}"/>` : ""}<w:spacing w:after="${Math.max(0, Math.round(options.after ?? 80))}" w:line="${Math.max(240, Math.round(fontSize * 25))}" w:lineRule="auto"/></w:pPr>${runs || "<w:r><w:t></w:t></w:r>"}</w:p>`;
+}
+
+function wordTableXml(lines) {
+  const columnCount = Math.max(2, Math.min(8, Math.max(...lines.map((line) => line.cells.length))));
+  const tableWidth = 9360;
+  const columnWidth = Math.floor(tableWidth / columnCount);
+  const grid = Array.from({ length: columnCount }, () => `<w:gridCol w:w="${columnWidth}"/>`).join("");
+  const rows = lines.map((line) => {
+    const cells = Array.from({ length: columnCount }, (_, index) => line.cells[index] || "");
+    return `<w:tr>${cells.map((cell) => `<w:tc><w:tcPr><w:tcW w:w="${columnWidth}" w:type="dxa"/><w:tcMar><w:top w:w="80" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tcMar></w:tcPr>${wordParagraphXml(cell, { fontSize: line.fontSize, bold: line.bold, after: 0 })}</w:tc>`).join("")}</w:tr>`;
+  }).join("");
+  return `<w:tbl>
+  <w:tblPr><w:tblW w:w="${tableWidth}" w:type="dxa"/><w:tblInd w:w="0" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4" w:color="D8D9DD"/><w:left w:val="single" w:sz="4" w:color="D8D9DD"/><w:bottom w:val="single" w:sz="4" w:color="D8D9DD"/><w:right w:val="single" w:sz="4" w:color="D8D9DD"/><w:insideH w:val="single" w:sz="4" w:color="E5E7EB"/><w:insideV w:val="single" w:sz="4" w:color="E5E7EB"/></w:tblBorders><w:tblLook w:val="04A0"/></w:tblPr>
+  <w:tblGrid>${grid}</w:tblGrid>
+  ${rows}
+</w:tbl>`;
 }
 
 function wordImageParagraphXml(relationshipId, width, height, imageId, pageNumber, hiddenText = "") {
@@ -4075,9 +4927,11 @@ function downloadBlob(data, name, type) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function showLoading(message, progress = 0) {
+function showLoading(message, progress = 0, options = {}) {
   clearTimeout(loadingHideTimer);
   els.loadingBar.classList.remove("hidden");
+  loadingCancelHandler = typeof options.onCancel === "function" ? options.onCancel : null;
+  els.loadingCancelBtn.classList.toggle("hidden", !loadingCancelHandler);
   updateLoading(message, progress);
 }
 
@@ -4089,6 +4943,8 @@ function updateLoading(message, progress) {
 }
 
 function hideLoading(message = "载入完成") {
+  loadingCancelHandler = null;
+  els.loadingCancelBtn.classList.add("hidden");
   updateLoading(message, 100);
   clearTimeout(loadingHideTimer);
   loadingHideTimer = setTimeout(() => els.loadingBar.classList.add("hidden"), 320);

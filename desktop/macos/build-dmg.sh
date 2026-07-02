@@ -33,6 +33,7 @@ PYTHON="/Users/kuuga/.cache/codex-runtimes/codex-primary-runtime/dependencies/py
 "$PYTHON" -c 'from PIL import Image; import sys; Image.open(sys.argv[1]).save(sys.argv[2], format="ICNS")' \
   "$BUILD/AppIcon.iconset/icon_512x512@2x.png" "$APP/Contents/Resources/AppIcon.icns"
 
+xattr -cr "$APP"
 codesign --force --deep --sign - "$APP"
 cp -R "$APP" "$DMG_ROOT/"
 ln -s /Applications "$DMG_ROOT/Applications"

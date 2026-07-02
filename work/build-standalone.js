@@ -5,6 +5,16 @@ const root = path.resolve(__dirname, "..");
 const appDir = path.join(root, "outputs", "pdf-page-studio");
 const indexPath = path.join(appDir, "index.html");
 
+const existingStandalone = fs.existsSync(indexPath) ? fs.readFileSync(indexPath, "utf8") : "";
+if (
+  existingStandalone.includes("PDF大编辑")
+  && existingStandalone.includes('id="printBtn" title="打印"')
+  && existingStandalone.includes('id="menuPrintBtn" class="narrow-print-item" role="menuitem">打印</button>')
+) {
+  console.log("Using checked-in PDF大编辑 standalone page.");
+  process.exit(0);
+}
+
 const css = fs.readFileSync(path.join(appDir, "styles.css"), "utf8");
 const pdfLib = fs.readFileSync(path.join(appDir, "vendor", "pdf-lib.min.js"), "utf8");
 const lucide = fs.readFileSync(path.join(appDir, "vendor", "lucide.min.js"), "utf8");
@@ -48,16 +58,15 @@ __CSS__
               <button id="exportSelectedMenuBtn" role="menuitem"><span id="exportSelectedMenuLabel">导出选中页</span></button>
             </div>
           </div>
-          <button class="text-btn" id="printBtn" title="打印当前整理后的 PDF">
-            <span>打印</span>
-          </button>
           <div class="other-menu-wrap">
             <button class="text-btn" id="otherBtn" title="其他功能" aria-haspopup="menu" aria-expanded="false">
-              <span>其他</span>
+              <span>更多</span>
+              <i data-lucide="chevron-down"></i>
             </button>
             <div id="otherMenu" class="export-menu other-menu hidden" role="menu">
               <button id="menuSearchBtn" class="narrow-search-item" role="menuitem">搜索文字</button>
-              <button id="menuPrintBtn" class="narrow-print-item" role="menuitem">打印</button>
+              <button id="menuPrintBtn" role="menuitem">打印</button>
+              <button id="menuFullScreenBtn" class="narrow-fullscreen-item" role="menuitem">全屏</button>
               <button id="menuZoomOutBtn" class="narrow-zoom-item" role="menuitem">缩小预览</button>
               <button id="menuZoomInBtn" class="narrow-zoom-item" role="menuitem">放大预览</button>
               <button id="menuFitBtn" class="narrow-zoom-item" role="menuitem">适合页面</button>
@@ -100,6 +109,9 @@ __CSS__
             <button id="singleBtn">单页</button>
             <button id="overviewBtn">总览</button>
           </div>
+          <button class="text-btn" id="fullScreenBtn" title="进入全屏模式">
+            <span>全屏</span>
+          </button>
         </div>
       </header>
 
@@ -270,13 +282,6 @@ __CSS__
               <label><input type="radio" name="exportQuality" value="compact"><span><b>小体积</b><small id="qualityEstimateCompact">估算中</small></span></label>
             </div>
           </fieldset>
-          <fieldset id="wordModeGroup" class="export-choice-group hidden">
-            <legend>Word 转换方式</legend>
-            <div class="export-choice-grid">
-              <label><input type="radio" name="wordMode" value="fidelity" checked><span><b>保留原版式</b><small>间距、颜色和排版最接近 PDF</small></span></label>
-              <label><input type="radio" name="wordMode" value="editable"><span><b>可编辑文字</b><small>适合继续编辑，复杂排版可能变化</small></span></label>
-            </div>
-          </fieldset>
           <p id="exportDialogNote" class="export-dialog-note">预估大小会因页面内容有所浮动。下一步可在系统窗口中填写文件名并选择保存位置；多张图片会保存为 ZIP。</p>
           <div class="modal-actions">
             <button id="exportCancelBtn" class="wide-btn">取消</button>
@@ -312,18 +317,107 @@ __CSS__
       <div id="printDialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="printDialogTitle">
         <div class="modal-card print-dialog-card">
           <div class="print-dialog-head">
-            <h2 id="printDialogTitle">打印预览</h2>
-            <span id="printPageSummary"></span>
+            <div>
+              <h2 id="printDialogTitle">打印中心</h2>
+              <p id="printStatusText">设置完成后直接发送到所选打印机。</p>
+            </div>
+            <span id="printPageSummary">0 页</span>
           </div>
-          <iframe id="printPreviewFrame" title="打印预览"></iframe>
+          <div class="print-dialog-body">
+            <form class="print-settings" id="printSettingsForm">
+              <section>
+                <div class="print-section-title"><b>打印机</b><button id="refreshPrintersBtn" type="button">刷新</button></div>
+                <select id="printerSelect"></select>
+                <p id="printerStatus" class="print-hint">正在读取打印机…</p>
+              </section>
+              <section>
+                <b>页面范围</b>
+                <select id="printRangeSelect">
+                  <option value="all">全部页面</option>
+                  <option value="current">当前页面</option>
+                  <option value="selected">当前选中的页面</option>
+                  <option value="custom">自定义页面</option>
+                </select>
+                <input id="customRangeInput" class="hidden" type="text" placeholder="例如 1-3,6,8-10">
+                <p id="printRangeHint" class="print-hint">预计打印 0 页</p>
+              </section>
+              <section class="print-two-col">
+                <label><span>份数</span><input id="copiesInput" type="number" min="1" max="999" value="1"></label>
+                <label class="switch-label"><input id="collateInput" type="checkbox" checked><span>逐份打印</span></label>
+              </section>
+              <section class="print-two-col">
+                <label><span>纸张</span><select id="paperSelect">
+                  <option value="default">打印机默认</option>
+                  <option value="A4">A4</option>
+                  <option value="A3">A3</option>
+                  <option value="A5">A5</option>
+                  <option value="Letter">Letter</option>
+                  <option value="Legal">Legal</option>
+                  <option value="Tabloid">Tabloid</option>
+                </select></label>
+                <label><span>方向</span><select id="orientationSelect">
+                  <option value="auto">自动匹配</option>
+                  <option value="portrait">纵向</option>
+                  <option value="landscape">横向</option>
+                </select></label>
+              </section>
+              <section class="print-two-col">
+                <label><span>颜色</span><select id="colorSelect"><option value="color">彩色</option><option value="gray">灰度</option></select></label>
+                <label><span>双面</span><select id="duplexSelect"><option value="simplex">单面</option><option value="longEdge">长边翻转</option><option value="shortEdge">短边翻转</option></select></label>
+              </section>
+              <section class="print-two-col">
+                <label><span>缩放</span><select id="scaleSelect">
+                  <option value="fit">适合可打印区域</option>
+                  <option value="actual">实际大小 100%</option>
+                  <option value="shrink">缩小过大页面</option>
+                  <option value="custom">自定义百分比</option>
+                </select></label>
+                <label><span>百分比</span><input id="scalePercentInput" type="number" min="10" max="400" value="100" disabled></label>
+              </section>
+              <section class="print-two-col">
+                <label><span>每张页数</span><select id="pagesPerSheetSelect"><option>1</option><option>2</option><option>4</option><option>6</option><option>9</option><option>16</option></select></label>
+                <label><span>分辨率</span><select id="dpiSelect"><option value="default">默认</option><option value="300">300 DPI</option><option value="600">600 DPI</option></select></label>
+              </section>
+              <section>
+                <b>页边距</b>
+                <select id="marginSelect"><option value="default">默认</option><option value="none">无</option><option value="printable">打印机可打印区域</option><option value="custom">自定义</option></select>
+                <div id="customMargins" class="custom-margins hidden">
+                  <label>上<input id="marginTopInput" type="number" min="0" max="100" value="10"><span>mm</span></label>
+                  <label>右<input id="marginRightInput" type="number" min="0" max="100" value="10"><span>mm</span></label>
+                  <label>下<input id="marginBottomInput" type="number" min="0" max="100" value="10"><span>mm</span></label>
+                  <label>左<input id="marginLeftInput" type="number" min="0" max="100" value="10"><span>mm</span></label>
+                </div>
+              </section>
+              <section>
+                <label class="switch-label"><input id="printBackgroundInput" type="checkbox" checked><span>打印页面背景和背景图片</span></label>
+              </section>
+            </form>
+            <section class="print-preview-pane">
+              <div class="print-preview-toolbar">
+                <button id="previewPrevBtn" type="button">上一页</button>
+                <span id="printPreviewPage">0 / 0</span>
+                <button id="previewNextBtn" type="button">下一页</button>
+                <span class="toolbar-sep"></span>
+                <button id="previewZoomOutBtn" type="button">缩小</button>
+                <button id="previewZoomInBtn" type="button">放大</button>
+                <button id="previewFitBtn" type="button">适合页面</button>
+                <button id="previewWidthBtn" type="button">适合宽度</button>
+              </div>
+              <div class="print-preview-stage">
+                <iframe id="printPreviewFrame" title="打印预览"></iframe>
+                <div id="printPreviewLoading" class="print-preview-loading hidden">正在生成预览…</div>
+              </div>
+            </section>
+          </div>
           <div class="modal-actions">
-            <button id="printCancelBtn" class="wide-btn">关闭</button>
+            <button id="printCancelBtn" class="wide-btn">取消</button>
+            <button id="advancedPrintBtn" class="wide-btn">系统高级打印…</button>
             <button id="printConfirmBtn" class="primary-btn">打印</button>
           </div>
         </div>
       </div>
       <div id="loadingBar" class="loading-bar hidden" role="status" aria-live="polite">
-        <div class="loading-bar-head"><span id="loadingText">正在载入文件</span><b id="loadingPercent">0%</b></div>
+        <div class="loading-bar-head"><span id="loadingText">正在载入文件</span><b id="loadingPercent">0%</b><button id="loadingCancelBtn" class="loading-cancel hidden" type="button">取消</button></div>
         <progress id="loadingProgress" max="100" value="0"></progress>
       </div>
       <div id="searchStatus" class="search-status hidden" role="status" aria-live="polite"></div>
@@ -337,13 +431,22 @@ __PDF_LIB__
     <script>
 __LUCIDE__
     </script>
-    <script type="module">
+    <script>
       const pdfJsSource = __PDF_JS__;
       const pdfWorkerSource = __PDF_WORKER__;
       const pdfJsUrl = URL.createObjectURL(new Blob([pdfJsSource], { type: "text/javascript" }));
       const pdfWorkerUrl = URL.createObjectURL(new Blob([pdfWorkerSource], { type: "text/javascript" }));
-      const pdfjsLib = await import(pdfJsUrl);
-      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+      let pdfjsLib = null;
+      const pdfJsReady = import(pdfJsUrl)
+        .then((lib) => {
+          pdfjsLib = lib;
+          pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+          return pdfjsLib;
+        })
+        .catch((error) => {
+          console.error("PDF 阅读引擎载入失败", error);
+          return null;
+        });
 
 __APP__
     </script>

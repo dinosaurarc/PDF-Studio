@@ -6,6 +6,7 @@ OUTPUTS="$ROOT/outputs"
 NODE="/Users/kuuga/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node"
 VERSION="$("$NODE" -p "require('$ROOT/desktop/electron/package.json').version")"
 STAGE="$(mktemp -d /tmp/pdf-studio-online-release.XXXXXX)"
+UPLOAD_DIR="$OUTPUTS/PDF-Studio-${VERSION}-GitHub上传文件"
 trap 'rm -rf "$STAGE"' EXIT
 
 "$NODE" "$ROOT/work/build-standalone.js"
@@ -39,6 +40,21 @@ find "$OUTPUTS" -maxdepth 1 -mindepth 1 \( \
      'desktop/macos/build/*' 'desktop/macos/.module-cache/*' 'desktop/macos/.module-cache-v2/*' \
      '*.DS_Store')
 
+mkdir -p "$UPLOAD_DIR"
+/usr/bin/unzip -q "$OUTPUTS/PDF-Studio-${VERSION}-网页与桌面发布源码.zip" -d "$UPLOAD_DIR"
+cat > "$UPLOAD_DIR/请先看-上传步骤.txt" <<EOF
+PDF大编辑 ${VERSION} 上传步骤
+
+1. 打开 GitHub 仓库 dinosaurarc/PDF-Studio。
+2. 进入 main 分支，把本文件夹里的所有内容上传并提交。
+   注意：.github 是隐藏文件夹，macOS Finder 如看不到，请按 Command + Shift + . 显示隐藏文件。
+3. 提交到 main 后，网页版会自动发布。
+4. 需要生成 Windows 和 macOS 安装包时，在 GitHub 网页创建标签 v${VERSION}。
+   标签创建后，Actions 会自动生成 Release，并上传 Setup、Portable、DMG、更新 ZIP、latest.yml/latest-mac.yml 和 blockmap。
+5. 只是修改 README、.gitignore 或说明文件时，不需要创建新标签，桌面安装包也不会自动生成。
+EOF
+(cd "$OUTPUTS" && /usr/bin/zip -q -r -X "PDF-Studio-${VERSION}-GitHub上传包.zip" "PDF-Studio-${VERSION}-GitHub上传文件")
+
 cp "$ROOT/发布到网页和Windows软件说明.txt" "$OUTPUTS/PDF大编辑-${VERSION}-网页与桌面发布说明.txt"
 
 (
@@ -46,10 +62,13 @@ cp "$ROOT/发布到网页和Windows软件说明.txt" "$OUTPUTS/PDF大编辑-${VE
   /usr/bin/shasum -a 256 \
     "PDF-Studio-${VERSION}-Web.zip" \
     "PDF-Studio-${VERSION}-网页与桌面发布源码.zip" \
+    "PDF-Studio-${VERSION}-GitHub上传包.zip" \
     > "PDF-Studio-${VERSION}-SHA256SUMS.txt"
 )
 
 echo "$OUTPUTS/PDF-Studio-${VERSION}-Web.zip"
 echo "$OUTPUTS/PDF-Studio-${VERSION}-网页与桌面发布源码.zip"
+echo "$OUTPUTS/PDF-Studio-${VERSION}-GitHub上传包.zip"
+echo "$UPLOAD_DIR"
 echo "$OUTPUTS/PDF-Studio-${VERSION}-SHA256SUMS.txt"
 echo "$OUTPUTS/PDF大编辑-${VERSION}-网页与桌面发布说明.txt"

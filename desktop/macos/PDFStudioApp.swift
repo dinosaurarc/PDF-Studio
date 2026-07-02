@@ -1,8 +1,13 @@
 import AppKit
 import Darwin
 import Network
+import PDFKit
 import UniformTypeIdentifiers
 import WebKit
+
+private func printDebugLog(_ event: String) {
+    NSLog("[PDFStudioPrint] \(event)")
+}
 
 final class FileAwareWebView: WKWebView {
     var onDroppedFileURLs: (([URL]) -> Void)?
@@ -100,10 +105,18 @@ final class LocalWebServer {
 
 final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     weak var window: NSWindow?
+    var onToggleFullscreen: (() -> Void)?
+    var onOpenTextColorPanel: ((String?) -> Void)?
+    var onPrintHtml: ((String, @escaping (Any?, String?) -> Void) -> Void)?
+    var onPrintPdf: ((Data, @escaping (Any?, String?) -> Void) -> Void)?
     private var fileURLs: [String: URL] = [:]
     private var pendingOpenURLs: [URL] = []
     private var pendingSaveData: [String: Data] = [:]
     private var pendingSaveSizes: [String: Int] = [:]
+    private var pendingPrintHtml: [String: String] = [:]
+    private var pendingPrintSizes: [String: Int] = [:]
+    private var pendingPrintPdfData: [String: Data] = [:]
+    private var pendingPrintPdfSizes: [String: Int] = [:]
 
     func registerSelectedFiles(_ urls: [URL]) {
         pendingOpenURLs = urls
@@ -140,6 +153,30 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             saveFile(body: body, replyHandler: replyHandler)
         case "reportError":
             showFileError(message: body["message"] as? String, replyHandler: replyHandler)
+        case "toggleFullscreen":
+            onToggleFullscreen?()
+            replyHandler(["ok": true], nil)
+        case "openTextColorPanel":
+            onOpenTextColorPanel?(body["color"] as? String)
+            replyHandler(["ok": true], nil)
+        case "copyImageToClipboard":
+            copyImageToClipboard(body: body, replyHandler: replyHandler)
+        case "printBegin":
+            beginPrintHtml(body: body, replyHandler: replyHandler)
+        case "printChunk":
+            appendPrintHtml(body: body, replyHandler: replyHandler)
+        case "printEnd":
+            finishPrintHtml(body: body, replyHandler: replyHandler)
+        case "printAbort":
+            abortPrintHtml(body: body, replyHandler: replyHandler)
+        case "printPdfBegin":
+            beginPrintPdf(body: body, replyHandler: replyHandler)
+        case "printPdfChunk":
+            appendPrintPdf(body: body, replyHandler: replyHandler)
+        case "printPdfEnd":
+            finishPrintPdf(body: body, replyHandler: replyHandler)
+        case "printPdfAbort":
+            abortPrintPdf(body: body, replyHandler: replyHandler)
         default:
             replyHandler(nil, "未知操作")
         }
@@ -205,6 +242,32 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         } else {
             alert.runModal()
             replyHandler(["ok": true], nil)
+        }
+    }
+
+    private func copyImageToClipboard(body: [String: Any], replyHandler: @escaping (Any?, String?) -> Void) {
+        guard
+            let dataUrl = body["dataUrl"] as? String,
+            let commaIndex = dataUrl.firstIndex(of: ",")
+        else {
+            replyHandler(nil, "剪贴板图片数据不完整")
+            return
+        }
+        let encoded = String(dataUrl[dataUrl.index(after: commaIndex)...])
+        guard
+            let data = Data(base64Encoded: encoded),
+            let image = NSImage(data: data)
+        else {
+            replyHandler(nil, "剪贴板图片无法读取")
+            return
+        }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        let ok = pasteboard.writeObjects([image])
+        if ok {
+            replyHandler(["ok": true], nil)
+        } else {
+            replyHandler(nil, "无法写入系统剪贴板")
         }
     }
 
@@ -298,6 +361,119 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         if let token = body["token"] as? String {
             pendingSaveData.removeValue(forKey: token)
             pendingSaveSizes.removeValue(forKey: token)
+        }
+        replyHandler(["ok": true], nil)
+    }
+
+    private func beginPrintHtml(body: [String: Any], replyHandler: @escaping (Any?, String?) -> Void) {
+        guard
+            let token = body["token"] as? String,
+            let expectedSize = body["size"] as? Int,
+            expectedSize >= 0,
+            expectedSize <= 120_000_000
+        else {
+            replyHandler(nil, "打印请求无效")
+            return
+        }
+        pendingPrintHtml[token] = ""
+        pendingPrintSizes[token] = expectedSize
+        replyHandler(["ok": true], nil)
+    }
+
+    private func appendPrintHtml(body: [String: Any], replyHandler: @escaping (Any?, String?) -> Void) {
+        guard
+            let token = body["token"] as? String,
+            var pending = pendingPrintHtml[token],
+            let chunk = body["data"] as? String,
+            let expectedSize = pendingPrintSizes[token],
+            pending.count + chunk.count <= expectedSize
+        else {
+            replyHandler(nil, "打印数据无效")
+            return
+        }
+        pending.append(chunk)
+        pendingPrintHtml[token] = pending
+        replyHandler(["ok": true], nil)
+    }
+
+    private func finishPrintHtml(body: [String: Any], replyHandler: @escaping (Any?, String?) -> Void) {
+        guard
+            let token = body["token"] as? String,
+            let html = pendingPrintHtml.removeValue(forKey: token),
+            let expectedSize = pendingPrintSizes.removeValue(forKey: token),
+            html.count == expectedSize
+        else {
+            replyHandler(nil, "打印数据不完整")
+            return
+        }
+        guard let onPrintHtml else {
+            replyHandler(["ok": false, "message": "打印窗口还没有准备好"], nil)
+            return
+        }
+        onPrintHtml(html, replyHandler)
+    }
+
+    private func abortPrintHtml(body: [String: Any], replyHandler: @escaping (Any?, String?) -> Void) {
+        if let token = body["token"] as? String {
+            pendingPrintHtml.removeValue(forKey: token)
+            pendingPrintSizes.removeValue(forKey: token)
+        }
+        replyHandler(["ok": true], nil)
+    }
+
+    private func beginPrintPdf(body: [String: Any], replyHandler: @escaping (Any?, String?) -> Void) {
+        guard
+            let token = body["token"] as? String,
+            let expectedSize = body["size"] as? Int,
+            expectedSize > 0,
+            expectedSize <= 1_500_000_000
+        else {
+            replyHandler(nil, "打印请求无效")
+            return
+        }
+        pendingPrintPdfData[token] = Data(capacity: expectedSize)
+        pendingPrintPdfSizes[token] = expectedSize
+        replyHandler(["ok": true], nil)
+    }
+
+    private func appendPrintPdf(body: [String: Any], replyHandler: @escaping (Any?, String?) -> Void) {
+        guard
+            let token = body["token"] as? String,
+            var pending = pendingPrintPdfData[token],
+            let encoded = body["data"] as? String,
+            let chunk = Data(base64Encoded: encoded),
+            let expectedSize = pendingPrintPdfSizes[token],
+            pending.count + chunk.count <= expectedSize
+        else {
+            replyHandler(nil, "打印数据无效")
+            return
+        }
+        pending.append(chunk)
+        pendingPrintPdfData[token] = pending
+        replyHandler(["ok": true], nil)
+    }
+
+    private func finishPrintPdf(body: [String: Any], replyHandler: @escaping (Any?, String?) -> Void) {
+        guard
+            let token = body["token"] as? String,
+            let data = pendingPrintPdfData.removeValue(forKey: token),
+            let expectedSize = pendingPrintPdfSizes.removeValue(forKey: token),
+            data.count == expectedSize
+        else {
+            replyHandler(nil, "打印数据不完整")
+            return
+        }
+        guard let onPrintPdf else {
+            replyHandler(["ok": false, "message": "打印窗口还没有准备好"], nil)
+            return
+        }
+        onPrintPdf(data, replyHandler)
+    }
+
+    private func abortPrintPdf(body: [String: Any], replyHandler: @escaping (Any?, String?) -> Void) {
+        if let token = body["token"] as? String {
+            pendingPrintPdfData.removeValue(forKey: token)
+            pendingPrintPdfSizes.removeValue(forKey: token)
         }
         replyHandler(["ok": true], nil)
     }
@@ -436,12 +612,511 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     }
 }
 
+fileprivate enum WebPrintJobSource {
+    case html(String)
+    case pdf(Data)
+}
+
+final class PDFPrintOptions: NSObject {
+    @objc dynamic var autoRotate = true
+    @objc dynamic var showNotes = false
+    @objc dynamic var useExactScale = false
+    @objc dynamic var scalePercent: Double = 100
+    @objc dynamic var fillPaper = false
+    @objc dynamic var pagesPerSheet = 1
+}
+
+final class PDFPrintView: NSView {
+    private let document: PDFDocument
+    private let fallbackPrintInfo: NSPrintInfo
+    let options: PDFPrintOptions
+
+    init(document: PDFDocument, printInfo: NSPrintInfo, options: PDFPrintOptions) {
+        self.document = document
+        self.fallbackPrintInfo = printInfo
+        self.options = options
+        super.init(frame: NSRect(origin: .zero, size: printInfo.paperSize))
+    }
+
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override var isFlipped: Bool { false }
+
+    override func knowsPageRange(_ range: NSRangePointer) -> Bool {
+        let info = currentPrintInfo()
+        updateFrame(for: info)
+        range.pointee = NSRange(location: 1, length: max(1, sheetCount))
+        return true
+    }
+
+    override func rectForPage(_ page: Int) -> NSRect {
+        let info = currentPrintInfo()
+        updateFrame(for: info)
+        let paper = info.paperSize
+        return NSRect(x: 0, y: CGFloat(page - 1) * paper.height, width: paper.width, height: paper.height)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let operation = NSPrintOperation.current else { return }
+        let info = operation.printInfo
+        let sheetIndex = max(0, operation.currentPage - 1)
+        drawSheet(index: sheetIndex, printInfo: info)
+    }
+
+    private var pagesPerSheet: Int {
+        min(16, max(1, options.pagesPerSheet))
+    }
+
+    private var sheetCount: Int {
+        Int(ceil(Double(max(1, document.pageCount)) / Double(pagesPerSheet)))
+    }
+
+    private func currentPrintInfo() -> NSPrintInfo {
+        NSPrintOperation.current?.printInfo ?? fallbackPrintInfo
+    }
+
+    private func updateFrame(for printInfo: NSPrintInfo) {
+        let paper = printInfo.paperSize
+        frame = NSRect(x: 0, y: 0, width: paper.width, height: paper.height * CGFloat(sheetCount))
+    }
+
+    private func drawSheet(index sheetIndex: Int, printInfo: NSPrintInfo) {
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+        let paper = printInfo.paperSize
+        let sheetRect = NSRect(x: 0, y: CGFloat(sheetIndex) * paper.height, width: paper.width, height: paper.height)
+        NSColor.white.setFill()
+        sheetRect.fill()
+
+        let contentRect = printableContentRect(for: printInfo, in: sheetRect)
+        let (columns, rows) = grid(for: pagesPerSheet, paper: paper)
+        let gap: CGFloat = pagesPerSheet > 1 ? 8 : 0
+        let slotWidth = (contentRect.width - CGFloat(columns - 1) * gap) / CGFloat(columns)
+        let slotHeight = (contentRect.height - CGFloat(rows - 1) * gap) / CGFloat(rows)
+        let firstPageIndex = sheetIndex * pagesPerSheet
+
+        for slotIndex in 0..<pagesPerSheet {
+            let pageIndex = firstPageIndex + slotIndex
+            guard pageIndex < document.pageCount, let page = document.page(at: pageIndex) else { continue }
+            let column = slotIndex % columns
+            let row = rows - 1 - (slotIndex / columns)
+            let slotRect = NSRect(
+                x: contentRect.minX + CGFloat(column) * (slotWidth + gap),
+                y: contentRect.minY + CGFloat(row) * (slotHeight + gap),
+                width: slotWidth,
+                height: slotHeight
+            )
+            draw(page: page, pageIndex: pageIndex, in: slotRect, context: context)
+        }
+    }
+
+    private func printableContentRect(for printInfo: NSPrintInfo, in sheetRect: NSRect) -> NSRect {
+        var rect = NSRect(
+            x: sheetRect.minX + max(0, printInfo.leftMargin),
+            y: sheetRect.minY + max(0, printInfo.bottomMargin),
+            width: sheetRect.width - max(0, printInfo.leftMargin) - max(0, printInfo.rightMargin),
+            height: sheetRect.height - max(0, printInfo.topMargin) - max(0, printInfo.bottomMargin)
+        )
+        if rect.width <= 0 || rect.height <= 0 {
+            rect = sheetRect.insetBy(dx: 18, dy: 18)
+        }
+        return rect
+    }
+
+    private func grid(for count: Int, paper: NSSize) -> (Int, Int) {
+        switch count {
+        case 1:
+            return (1, 1)
+        case 2:
+            return paper.width > paper.height ? (2, 1) : (1, 2)
+        case 3, 4:
+            return (2, 2)
+        case 5, 6:
+            return paper.width > paper.height ? (3, 2) : (2, 3)
+        case 7...9:
+            return (3, 3)
+        default:
+            return (4, 4)
+        }
+    }
+
+    private func draw(page: PDFPage, pageIndex: Int, in slotRect: NSRect, context: CGContext) {
+        let pageBox = page.bounds(for: .mediaBox)
+        guard pageBox.width > 0, pageBox.height > 0, slotRect.width > 0, slotRect.height > 0 else { return }
+        let shouldRotate = options.autoRotate && ((pageBox.width > pageBox.height) != (slotRect.width > slotRect.height))
+        let sourceWidth = shouldRotate ? pageBox.height : pageBox.width
+        let sourceHeight = shouldRotate ? pageBox.width : pageBox.height
+        let fitScale = min(slotRect.width / sourceWidth, slotRect.height / sourceHeight)
+        let fillScale = max(slotRect.width / sourceWidth, slotRect.height / sourceHeight)
+        let scale: CGFloat
+        if options.useExactScale {
+            scale = max(0.05, min(4, CGFloat(options.scalePercent / 100.0)))
+        } else {
+            scale = options.fillPaper ? fillScale : fitScale
+        }
+        let drawWidth = sourceWidth * scale
+        let drawHeight = sourceHeight * scale
+        let targetRect = NSRect(
+            x: slotRect.minX + (slotRect.width - drawWidth) / 2,
+            y: slotRect.minY + (slotRect.height - drawHeight) / 2,
+            width: drawWidth,
+            height: drawHeight
+        )
+
+        context.saveGState()
+        context.clip(to: slotRect)
+        if shouldRotate {
+            context.translateBy(x: targetRect.minX, y: targetRect.minY)
+            context.translateBy(x: 0, y: drawHeight)
+            context.rotate(by: -.pi / 2)
+        } else {
+            context.translateBy(x: targetRect.minX, y: targetRect.minY)
+        }
+        context.scaleBy(x: scale, y: scale)
+        context.translateBy(x: -pageBox.minX, y: -pageBox.minY)
+        page.draw(with: .mediaBox, to: context)
+        context.restoreGState()
+
+        if options.showNotes {
+            drawNote("页码：\(pageIndex + 1)/\(document.pageCount)", below: slotRect)
+        }
+    }
+
+    private func drawNote(_ text: String, below rect: NSRect) {
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 9),
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ]
+        let attributed = NSAttributedString(string: text, attributes: attributes)
+        let size = attributed.size()
+        let noteRect = NSRect(x: rect.midX - size.width / 2, y: max(rect.minY - 14, 2), width: size.width, height: size.height)
+        attributed.draw(in: noteRect)
+    }
+}
+
+final class PrintPreviewAccessoryController: NSViewController, NSPrintPanelAccessorizing {
+    private let options: PDFPrintOptions
+    private weak var printInfo: NSPrintInfo?
+    @objc dynamic var previewAutoRotate = true
+    @objc dynamic var previewShowNotes = false
+    @objc dynamic var previewUseExactScale = false
+    @objc dynamic var previewScalePercent: Double = 100
+    @objc dynamic var previewFillPaper = false
+    @objc dynamic var previewPagesPerSheet = 1
+    private let autoRotateButton = NSButton(checkboxWithTitle: "自动旋转", target: nil, action: nil)
+    private let showNotesButton = NSButton(checkboxWithTitle: "显示备注", target: nil, action: nil)
+    private let exactScaleButton = NSButton(radioButtonWithTitle: "缩放：", target: nil, action: nil)
+    private let scaleToFitButton = NSButton(radioButtonWithTitle: "缩放以适合：", target: nil, action: nil)
+    private let printWholeButton = NSButton(radioButtonWithTitle: "打印整个图像", target: nil, action: nil)
+    private let fillPaperButton = NSButton(radioButtonWithTitle: "填满纸张", target: nil, action: nil)
+    private let scaleField = NSTextField(string: "100")
+    private let copiesField = NSTextField(string: "1")
+    private let copiesStepper = NSStepper()
+    var onChange: (() -> Void)?
+
+    init(options: PDFPrintOptions, printInfo: NSPrintInfo) {
+        self.options = options
+        self.printInfo = printInfo
+        self.previewAutoRotate = options.autoRotate
+        self.previewShowNotes = options.showNotes
+        self.previewUseExactScale = options.useExactScale
+        self.previewScalePercent = options.scalePercent
+        self.previewFillPaper = options.fillPaper
+        self.previewPagesPerSheet = options.pagesPerSheet
+        super.init(nibName: nil, bundle: nil)
+        title = "预览"
+    }
+
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override func loadView() {
+        let root = NSView(frame: NSRect(x: 0, y: 0, width: 560, height: 170))
+        view = root
+
+        autoRotateButton.frame = NSRect(x: 26, y: 126, width: 160, height: 24)
+        showNotesButton.frame = NSRect(x: 300, y: 126, width: 150, height: 24)
+        exactScaleButton.frame = NSRect(x: 26, y: 82, width: 92, height: 24)
+        scaleField.frame = NSRect(x: 118, y: 82, width: 76, height: 24)
+        scaleToFitButton.frame = NSRect(x: 26, y: 52, width: 130, height: 24)
+        printWholeButton.frame = NSRect(x: 300, y: 52, width: 170, height: 24)
+        fillPaperButton.frame = NSRect(x: 300, y: 24, width: 150, height: 24)
+
+        let copiesLabel = NSTextField(labelWithString: "每页份数：")
+        copiesLabel.frame = NSRect(x: 26, y: 12, width: 100, height: 22)
+        copiesField.frame = NSRect(x: 126, y: 8, width: 120, height: 26)
+        copiesStepper.frame = NSRect(x: 250, y: 8, width: 20, height: 26)
+        copiesStepper.minValue = 1
+        copiesStepper.maxValue = 16
+        copiesStepper.increment = 1
+
+        [autoRotateButton, showNotesButton, exactScaleButton, scaleField, scaleToFitButton, printWholeButton, fillPaperButton, copiesLabel, copiesField, copiesStepper].forEach {
+            root.addSubview($0)
+        }
+
+        autoRotateButton.target = self
+        autoRotateButton.action = #selector(controlChanged(_:))
+        showNotesButton.target = self
+        showNotesButton.action = #selector(controlChanged(_:))
+        exactScaleButton.target = self
+        exactScaleButton.action = #selector(selectExactScale(_:))
+        scaleToFitButton.target = self
+        scaleToFitButton.action = #selector(selectScaleToFit(_:))
+        printWholeButton.target = self
+        printWholeButton.action = #selector(selectPrintWhole(_:))
+        fillPaperButton.target = self
+        fillPaperButton.action = #selector(selectFillPaper(_:))
+        scaleField.target = self
+        scaleField.action = #selector(controlChanged(_:))
+        copiesField.target = self
+        copiesField.action = #selector(controlChanged(_:))
+        copiesStepper.target = self
+        copiesStepper.action = #selector(stepperChanged(_:))
+        syncControls()
+    }
+
+    func localizedSummaryItems() -> [[NSPrintPanel.AccessorySummaryKey : String]] {
+        let scaleText: String
+        if options.useExactScale {
+            scaleText = "\(Int(options.scalePercent.rounded()))%"
+        } else {
+            scaleText = options.fillPaper ? "填满纸张" : "打印整个图像"
+        }
+        return [
+            [.itemName: "自动旋转", .itemDescription: options.autoRotate ? "开" : "关"],
+            [.itemName: "缩放", .itemDescription: scaleText],
+            [.itemName: "每页份数", .itemDescription: "\(options.pagesPerSheet)"],
+        ]
+    }
+
+    func keyPathsForValuesAffectingPreview() -> Set<String> {
+        [
+            "previewAutoRotate",
+            "previewShowNotes",
+            "previewUseExactScale",
+            "previewScalePercent",
+            "previewFillPaper",
+            "previewPagesPerSheet",
+        ]
+    }
+
+    @objc private func selectExactScale(_ sender: Any?) {
+        previewUseExactScale = true
+        previewFillPaper = false
+        applyAndRefresh()
+    }
+
+    @objc private func selectScaleToFit(_ sender: Any?) {
+        previewUseExactScale = false
+        previewFillPaper = false
+        applyAndRefresh()
+    }
+
+    @objc private func selectPrintWhole(_ sender: Any?) {
+        previewUseExactScale = false
+        previewFillPaper = false
+        applyAndRefresh()
+    }
+
+    @objc private func selectFillPaper(_ sender: Any?) {
+        previewUseExactScale = false
+        previewFillPaper = true
+        applyAndRefresh()
+    }
+
+    @objc private func stepperChanged(_ sender: Any?) {
+        copiesField.stringValue = "\(Int(copiesStepper.integerValue))"
+        controlChanged(sender)
+    }
+
+    @objc private func controlChanged(_ sender: Any?) {
+        previewAutoRotate = autoRotateButton.state == .on
+        previewShowNotes = showNotesButton.state == .on
+        if exactScaleButton.state == .on {
+            previewUseExactScale = true
+            previewFillPaper = false
+        }
+        let scale = scaleField.doubleValue
+        previewScalePercent = min(400, max(5, scale.isFinite ? scale : 100))
+        let pages = min(16, max(1, copiesField.integerValue))
+        previewPagesPerSheet = pages
+        copiesStepper.integerValue = pages
+        applyAndRefresh()
+    }
+
+    private func applyAndRefresh() {
+        copyPreviewSettingsToOptions()
+        syncControls()
+        applyToPrintInfo()
+        willChangeValue(forKey: "localizedSummaryItems")
+        didChangeValue(forKey: "localizedSummaryItems")
+        onChange?()
+    }
+
+    private func syncControls() {
+        autoRotateButton.state = previewAutoRotate ? .on : .off
+        showNotesButton.state = previewShowNotes ? .on : .off
+        exactScaleButton.state = previewUseExactScale ? .on : .off
+        scaleToFitButton.state = previewUseExactScale ? .off : .on
+        printWholeButton.state = (!previewUseExactScale && !previewFillPaper) ? .on : .off
+        fillPaperButton.state = (!previewUseExactScale && previewFillPaper) ? .on : .off
+        scaleField.isEnabled = previewUseExactScale
+        scaleField.stringValue = "\(Int(previewScalePercent.rounded()))"
+        copiesField.stringValue = "\(previewPagesPerSheet)"
+        copiesStepper.integerValue = previewPagesPerSheet
+    }
+
+    private func copyPreviewSettingsToOptions() {
+        options.autoRotate = previewAutoRotate
+        options.showNotes = previewShowNotes
+        options.useExactScale = previewUseExactScale
+        options.scalePercent = previewScalePercent
+        options.fillPaper = previewFillPaper
+        options.pagesPerSheet = previewPagesPerSheet
+    }
+
+    private func applyToPrintInfo() {
+        guard let printInfo else { return }
+        printInfo.isHorizontallyCentered = true
+        printInfo.isVerticallyCentered = true
+        printInfo.horizontalPagination = options.useExactScale ? .automatic : .fit
+        printInfo.verticalPagination = options.useExactScale ? .automatic : .fit
+        printInfo.scalingFactor = CGFloat(options.scalePercent / 100.0)
+        printInfo.dictionary()[NSPrintInfo.AttributeKey.headerAndFooter] = NSNumber(value: options.showNotes)
+    }
+}
+
+final class WebPrintJob: NSObject, WKNavigationDelegate {
+    private let webView: WKWebView
+    private let source: WebPrintJobSource
+    private let replyHandler: (Any?, String?) -> Void
+    private let onFinish: () -> Void
+    private var completed = false
+    private var timeoutWorkItem: DispatchWorkItem?
+    private var temporaryPrintURL: URL?
+    private var accessoryController: PrintPreviewAccessoryController?
+    private var pdfPrintView: PDFPrintView?
+
+    fileprivate init(source: WebPrintJobSource, replyHandler: @escaping (Any?, String?) -> Void, onFinish: @escaping () -> Void) {
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .nonPersistent()
+        self.webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 900, height: 1200), configuration: configuration)
+        self.source = source
+        self.replyHandler = replyHandler
+        self.onFinish = onFinish
+        super.init()
+        self.webView.navigationDelegate = self
+    }
+
+    func start() {
+        printDebugLog("print-window-created")
+        scheduleTimeout(message: "打印页面载入超时")
+        switch source {
+        case .html(let html):
+            webView.loadHTMLString(html, baseURL: nil)
+        case .pdf:
+            timeoutWorkItem?.cancel()
+            printDebugLog("print-window-did-finish-load")
+            DispatchQueue.main.async { [weak self] in
+                self?.runPrintOperation()
+            }
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        timeoutWorkItem?.cancel()
+        printDebugLog("print-window-did-finish-load")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            self?.runPrintOperation()
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        finish(ok: false, message: "打印页面载入失败：\(error.localizedDescription)")
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        finish(ok: false, message: "打印页面载入失败：\(error.localizedDescription)")
+    }
+
+    private func runPrintOperation() {
+        guard !completed else { return }
+        printDebugLog("print-called")
+        let printInfo = NSPrintInfo.shared.copy() as? NSPrintInfo ?? NSPrintInfo()
+        printInfo.leftMargin = 18
+        printInfo.rightMargin = 18
+        printInfo.topMargin = 18
+        printInfo.bottomMargin = 18
+        printInfo.horizontalPagination = .fit
+        printInfo.verticalPagination = .fit
+        let operation: NSPrintOperation
+        let printPanel: NSPrintPanel
+        switch source {
+        case .pdf(let data):
+            guard let document = PDFDocument(data: data) else {
+                finish(ok: false, message: "打印文件无法读取")
+                return
+            }
+            let options = PDFPrintOptions()
+            let printView = PDFPrintView(document: document, printInfo: printInfo, options: options)
+            let accessory = PrintPreviewAccessoryController(options: options, printInfo: printInfo)
+            accessory.onChange = { [weak printView] in
+                printView?.needsDisplay = true
+            }
+            pdfPrintView = printView
+            accessoryController = accessory
+            operation = NSPrintOperation(view: printView, printInfo: printInfo)
+            printPanel = operation.printPanel
+            printPanel.options = [.showsCopies, .showsPageRange, .showsPaperSize, .showsOrientation, .showsScaling, .showsPreview]
+            printPanel.addAccessoryController(accessory)
+        case .html:
+            operation = webView.printOperation(with: printInfo)
+            printPanel = operation.printPanel
+            printPanel.options = [.showsCopies, .showsPageRange, .showsPaperSize, .showsOrientation, .showsScaling, .showsPreview]
+        }
+        operation.showsPrintPanel = true
+        operation.showsProgressPanel = false
+        let ok = operation.run()
+        printDebugLog(ok ? "print-callback-success" : "print-callback-failure")
+        finish(ok: ok, message: ok ? "打印任务已完成。" : "用户取消打印")
+    }
+
+    private func scheduleTimeout(message: String) {
+        timeoutWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            printDebugLog("print-timeout")
+            self?.finish(ok: false, message: message)
+        }
+        timeoutWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: item)
+    }
+
+    private func finish(ok: Bool, message: String) {
+        guard !completed else { return }
+        completed = true
+        timeoutWorkItem?.cancel()
+        webView.stopLoading()
+        if let temporaryPrintURL {
+            try? FileManager.default.removeItem(at: temporaryPrintURL.deletingLastPathComponent())
+        }
+        accessoryController = nil
+        pdfPrintView = nil
+        replyHandler(["ok": ok, "message": message], nil)
+        printDebugLog("print-window-destroyed")
+        onFinish()
+    }
+}
+
 final class WebViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
     let bridge = NativeBridge()
     private var webView: WKWebView!
     private var localServer: LocalWebServer?
     private var isPageReady = false
     private var pendingExternalOpenURLs: [URL] = []
+    private var activePrintJob: WebPrintJob?
+    private weak var observedFullscreenWindow: NSWindow?
 
     override func loadView() {
         let configuration = WKWebViewConfiguration()
@@ -460,12 +1135,25 @@ final class WebViewController: NSViewController, WKNavigationDelegate, WKUIDeleg
         webView = fileAwareWebView
         webView.navigationDelegate = self
         webView.uiDelegate = self
+        bridge.onToggleFullscreen = { [weak self] in
+            self?.view.window?.toggleFullScreen(nil)
+        }
+        bridge.onOpenTextColorPanel = { [weak self] color in
+            self?.openTextColorPanel(initialHex: color)
+        }
+        bridge.onPrintHtml = { [weak self] html, replyHandler in
+            self?.printHtml(html, replyHandler: replyHandler)
+        }
+        bridge.onPrintPdf = { [weak self] data, replyHandler in
+            self?.printPdf(data, replyHandler: replyHandler)
+        }
         view = webView
     }
 
     override func viewDidAppear() {
         super.viewDidAppear()
         bridge.window = view.window
+        observeFullscreenWindow(view.window)
     }
 
     func loadApplication() {
@@ -514,7 +1202,117 @@ final class WebViewController: NSViewController, WKNavigationDelegate, WKUIDeleg
     }
 
     deinit {
+        removeFullscreenObserver()
         localServer?.stop()
+    }
+
+    private func observeFullscreenWindow(_ window: NSWindow?) {
+        guard observedFullscreenWindow !== window else { return }
+        removeFullscreenObserver()
+        guard let window else { return }
+        observedFullscreenWindow = window
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidEnterFullScreen(_:)),
+            name: NSWindow.didEnterFullScreenNotification,
+            object: window
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidExitFullScreen(_:)),
+            name: NSWindow.didExitFullScreenNotification,
+            object: window
+        )
+    }
+
+    private func removeFullscreenObserver() {
+        guard let window = observedFullscreenWindow else { return }
+        NotificationCenter.default.removeObserver(self, name: NSWindow.didEnterFullScreenNotification, object: window)
+        NotificationCenter.default.removeObserver(self, name: NSWindow.didExitFullScreenNotification, object: window)
+        observedFullscreenWindow = nil
+    }
+
+    @objc private func windowDidEnterFullScreen(_ notification: Notification) {
+        notifyNativeFullscreenChanged(true)
+    }
+
+    @objc private func windowDidExitFullScreen(_ notification: Notification) {
+        notifyNativeFullscreenChanged(false)
+    }
+
+    private func notifyNativeFullscreenChanged(_ active: Bool) {
+        let value = active ? "true" : "false"
+        webView.evaluateJavaScript(
+            "window.pdfStudioNativeFullscreenChanged && window.pdfStudioNativeFullscreenChanged(\(value));",
+            completionHandler: nil
+        )
+    }
+
+    private func openTextColorPanel(initialHex: String?) {
+        let panel = NSColorPanel.shared
+        panel.showsAlpha = false
+        panel.isContinuous = true
+        if let color = nsColor(fromHex: initialHex) {
+            panel.color = color
+        }
+        panel.setTarget(self)
+        panel.setAction(#selector(textColorPanelChanged(_:)))
+        panel.orderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func textColorPanelChanged(_ sender: NSColorPanel) {
+        guard let hex = hexString(from: sender.color) else { return }
+        webView.evaluateJavaScript(
+            "window.pdfStudioReceivePickedTextColor && window.pdfStudioReceivePickedTextColor('\(hex)');",
+            completionHandler: nil
+        )
+    }
+
+    private func nsColor(fromHex hex: String?) -> NSColor? {
+        guard var value = hex?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+        if value.hasPrefix("#") { value.removeFirst() }
+        guard value.count == 6, let intValue = Int(value, radix: 16) else { return nil }
+        return NSColor(
+            calibratedRed: CGFloat((intValue >> 16) & 0xff) / 255,
+            green: CGFloat((intValue >> 8) & 0xff) / 255,
+            blue: CGFloat(intValue & 0xff) / 255,
+            alpha: 1
+        )
+    }
+
+    private func hexString(from color: NSColor) -> String? {
+        guard let converted = color.usingColorSpace(.sRGB) else { return nil }
+        let red = Int(round(max(0, min(1, converted.redComponent)) * 255))
+        let green = Int(round(max(0, min(1, converted.greenComponent)) * 255))
+        let blue = Int(round(max(0, min(1, converted.blueComponent)) * 255))
+        return String(format: "#%02x%02x%02x", red, green, blue)
+    }
+
+    private func printHtml(_ html: String, replyHandler: @escaping (Any?, String?) -> Void) {
+        printDebugLog("print-start")
+        guard activePrintJob == nil else {
+            replyHandler(["ok": false, "message": "已有打印任务正在进行。"], nil)
+            return
+        }
+        let job = WebPrintJob(source: .html(html), replyHandler: replyHandler) { [weak self] in
+            self?.activePrintJob = nil
+        }
+        activePrintJob = job
+        job.start()
+    }
+
+    private func printPdf(_ data: Data, replyHandler: @escaping (Any?, String?) -> Void) {
+        printDebugLog("print-start")
+        guard activePrintJob == nil else {
+            replyHandler(["ok": false, "message": "已有打印任务正在进行。"], nil)
+            return
+        }
+        let job = WebPrintJob(source: .pdf(data), replyHandler: replyHandler) { [weak self] in
+            self?.activePrintJob = nil
+        }
+        activePrintJob = job
+        job.start()
     }
 
     func webView(
@@ -717,6 +1515,64 @@ final class WebViewController: NSViewController, WKNavigationDelegate, WKUIDeleg
           if (String(error).includes("PERMISSION_CANCELLED")) {
             throw new DOMException("用户取消了权限申请", "AbortError");
           }
+          throw error;
+        }
+      };
+
+      const textToken = () => {
+        if (crypto?.randomUUID) return crypto.randomUUID();
+        return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      };
+
+      window.pdfStudioNativePrintPdf = async (bytes) => {
+        const token = textToken();
+        const pending = await toBytes(bytes);
+        const chunkSize = 192 * 1024;
+        try {
+          await handler.postMessage({ action: "printPdfBegin", token, size: pending.byteLength });
+          for (let offset = 0; offset < pending.byteLength; offset += chunkSize) {
+            const chunk = pending.subarray(offset, Math.min(offset + chunkSize, pending.byteLength));
+            await handler.postMessage({ action: "printPdfChunk", token, data: bytesToBase64(chunk) });
+          }
+          return await handler.postMessage({ action: "printPdfEnd", token });
+        } catch (error) {
+          handler.postMessage({ action: "printPdfAbort", token }).catch(() => {});
+          throw error;
+        }
+      };
+
+      window.pdfStudioGetRuntimeInfo = async () => ({
+        platform: "darwin",
+        packaged: true,
+        nativeShell: true,
+        portable: false,
+        updateSupported: false,
+        currentVersion: "0.3.3"
+      });
+
+      window.pdfStudioNativeToggleFullscreen = async () => {
+        return await handler.postMessage({ action: "toggleFullscreen" });
+      };
+
+      window.pdfStudioOpenTextColorPanel = async (color) => {
+        return await handler.postMessage({ action: "openTextColorPanel", color });
+      };
+
+      window.pdfStudioNativeCopyImageToClipboard = async (dataUrl) => {
+        return await handler.postMessage({ action: "copyImageToClipboard", dataUrl });
+      };
+
+      window.pdfStudioNativePrintHtml = async (html) => {
+        const token = textToken();
+        const chunkSize = 96 * 1024;
+        try {
+          await handler.postMessage({ action: "printBegin", token, size: html.length });
+          for (let offset = 0; offset < html.length; offset += chunkSize) {
+            await handler.postMessage({ action: "printChunk", token, data: html.slice(offset, offset + chunkSize) });
+          }
+          return await handler.postMessage({ action: "printEnd", token });
+        } catch (error) {
+          handler.postMessage({ action: "printAbort", token }).catch(() => {});
           throw error;
         }
       };

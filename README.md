@@ -33,12 +33,14 @@ GitHub Pages 会通过 [pages.yml](.github/workflows/pages.yml) 自动构建和�
 
 ## 自动发布
 
-推送到 `main` 后会同时：
+推送到 `main` 后会自动更新 GitHub Pages 网页。
 
-- 自动更新 GitHub Pages 网页
-- 自动构建 Windows 和 macOS
-- 按 `package.json` 中的版本号创建标签和 GitHub Release
-- 附加安装包、Portable、更新清单和 blockmap
+Windows 和 macOS 桌面安装包不会在普通提交时自动生成，避免说明文档或小改动反复创建 Release。桌面包只在以下两种情况生成：
+
+- 推送新的版本标签，例如 `v0.3.3`
+- 在 GitHub Actions 页面手动运行桌面打包流程
+
+正式版本标签会自动创建 GitHub Release，并附加 Windows Setup、Portable、`latest.yml`、macOS DMG、更新 ZIP、`latest-mac.yml` 和 blockmap。
 
 桌面安装版通过 `electron-updater` 从当前 GitHub 仓库的 Releases 获取更新。Windows Portable 只提示有新版，不会尝试自动安装。
 
@@ -47,10 +49,10 @@ GitHub Pages 会通过 [pages.yml](.github/workflows/pages.yml) 自动构建和�
 先同步版本号：
 
 ```bash
-node work/set-version.js 0.3.1
+node work/set-version.js 0.3.3
 ```
 
-提交并推送到 `main` 即可。自动流程会创建对应版本标签和 Release，并上传
+提交并推送到 `main` 后，网页会先自动发布。然后在 GitHub 网页创建并推送同名标签，例如 `v0.3.3`。标签推送后会创建对应 Release，并上传
 Windows Setup、Portable、`latest.yml`、macOS DMG、更新 ZIP、`latest-mac.yml` 和 blockmap。
 
 未配置签名资料时，自动流程仍会生成可手动下载的 macOS DMG/ZIP。

@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const http = require("node:http");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 const { autoUpdater } = require("electron-updater");
 const { writeSourceFile } = require("./file-store.cjs");
 
@@ -17,6 +18,9 @@ let closeApproved = false;
 let closeCheckActive = false;
 let rendererReady = false;
 let updateState = { status: "idle", currentVersion: app.getVersion(), percent: 0 };
+
+const printTempFiles = new Set();
+let activePrintWindow = null;
 
 function isPortableBuild() {
   return process.platform === "win32" && Boolean(process.env.PORTABLE_EXECUTABLE_FILE);
@@ -161,6 +165,219 @@ function focusMainWindow() {
   mainWindow.focus();
 }
 
+function printPreferencesPath() {
+  return path.join(app.getPath("userData"), "print-preferences.json");
+}
+
+async function readPrintPreferences() {
+  try {
+    const raw = await fsp.readFile(printPreferencesPath(), "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+async function savePrintPreferences(settings = {}) {
+  const allowed = {
+    printerName: settings.printerName || "",
+    paper: settings.paper || "default",
+    orientation: settings.orientation || "auto",
+    color: settings.color || "color",
+    duplex: settings.duplex || "simplex",
+    scaleMode: settings.scaleMode || "fit",
+    scalePercent: Number(settings.scalePercent) || 100,
+    marginMode: settings.marginMode || "default",
+    margins: sanitizeMargins(settings.margins),
+    pagesPerSheet: Number(settings.pagesPerSheet) || 1,
+    printBackground: settings.printBackground !== false,
+    dpi: settings.dpi || "default",
+  };
+  await fsp.mkdir(path.dirname(printPreferencesPath()), { recursive: true });
+  await fsp.writeFile(printPreferencesPath(), JSON.stringify(allowed, null, 2));
+  return allowed;
+}
+
+function sanitizeMargins(margins = {}) {
+  return {
+    top: clampNumber(margins.top, 0, 100, 10),
+    right: clampNumber(margins.right, 0, 100, 10),
+    bottom: clampNumber(margins.bottom, 0, 100, 10),
+    left: clampNumber(margins.left, 0, 100, 10),
+  };
+}
+
+function clampNumber(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
+}
+
+function normalizePrinter(printer) {
+  const options = printer.options || {};
+  return {
+    name: printer.name,
+    displayName: printer.displayName || printer.name,
+    description: printer.description || "",
+    status: printer.status || 0,
+    isDefault: Boolean(printer.isDefault),
+    duplexSupported: Boolean(options["printer-is-accepting-jobs"] !== "false" && options.Duplex),
+    colorSupported: options["print-color-mode-supported"] || options["ColorModel"] || "",
+    options,
+  };
+}
+
+async function getPrintInfo() {
+  if (!mainWindow || mainWindow.isDestroyed()) return { printers: [], preferences: {} };
+  const printers = (await mainWindow.webContents.getPrintersAsync()).map(normalizePrinter);
+  const preferences = await readPrintPreferences();
+  if (preferences.printerName && !printers.some((printer) => printer.name === preferences.printerName)) {
+    preferences.printerName = printers.find((printer) => printer.isDefault)?.name || printers[0]?.name || "";
+  }
+  return { printers, preferences };
+}
+
+async function writeTempPrintPdf(data) {
+  const bytes = Buffer.from(data instanceof Uint8Array ? data : new Uint8Array(data));
+  const dir = await fsp.mkdtemp(path.join(app.getPath("temp"), "pdf-studio-print-"));
+  const filePath = path.join(dir, "print-document.pdf");
+  await fsp.writeFile(filePath, bytes);
+  printTempFiles.add(filePath);
+  return filePath;
+}
+
+async function cleanupPrintFile(filePath) {
+  if (!filePath) return;
+  printTempFiles.delete(filePath);
+  try {
+    await fsp.rm(path.dirname(filePath), { recursive: true, force: true });
+  } catch {
+    // Best-effort cleanup; temp folders are not part of user documents.
+  }
+}
+
+async function cleanupAllPrintFiles() {
+  await Promise.all([...printTempFiles].map((filePath) => cleanupPrintFile(filePath)));
+}
+
+function waitForWebContentsLoad(webContents) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("打印文档载入超时。")), 30000);
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    webContents.once("did-finish-load", done);
+    webContents.once("did-fail-load", (_event, _code, description) => {
+      clearTimeout(timer);
+      reject(new Error(description || "打印文档载入失败。"));
+    });
+  });
+}
+
+async function createPrintWindow(pdfPath) {
+  const win = new BrowserWindow({
+    show: false,
+    width: 900,
+    height: 1200,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  activePrintWindow = win;
+  const loaded = waitForWebContentsLoad(win.webContents);
+  await win.loadURL(pathToFileURL(pdfPath).href);
+  await loaded;
+  return win;
+}
+
+function destroyPrintWindow(win) {
+  if (!win || win.isDestroyed()) return;
+  if (activePrintWindow === win) activePrintWindow = null;
+  win.destroy();
+}
+
+function buildElectronPrintOptions(settings = {}, { silent = true } = {}) {
+  const copies = Math.round(clampNumber(settings.copies, 1, 999, 1));
+  const pagesPerSheet = Math.round(clampNumber(settings.pagesPerSheet, 1, 16, 1));
+  const scalePercent = clampNumber(settings.scalePercent, 10, 400, 100);
+  const options = {
+    silent,
+    printBackground: settings.printBackground !== false,
+    color: settings.color !== "gray",
+    copies,
+    collate: Boolean(settings.collate),
+    pagesPerSheet,
+  };
+
+  if (settings.printerName && silent) options.deviceName = settings.printerName;
+  if (settings.orientation === "landscape") options.landscape = true;
+  if (settings.orientation === "portrait") options.landscape = false;
+  if (settings.paper && settings.paper !== "default") options.pageSize = settings.paper;
+  if (settings.duplex && settings.duplex !== "simplex") options.duplexMode = settings.duplex;
+  if (settings.scaleMode === "custom") options.scaleFactor = scalePercent;
+  if (settings.dpi && settings.dpi !== "default") {
+    const dpi = Math.round(clampNumber(settings.dpi, 72, 2400, 300));
+    options.dpi = { horizontal: dpi, vertical: dpi };
+  }
+
+  if (settings.marginMode === "none") {
+    options.margins = { marginType: "none" };
+  } else if (settings.marginMode === "printable") {
+    options.margins = { marginType: "printableArea" };
+  } else if (settings.marginMode === "custom") {
+    const margins = sanitizeMargins(settings.margins);
+    options.margins = {
+      marginType: "custom",
+      top: Math.round(margins.top * 1000),
+      right: Math.round(margins.right * 1000),
+      bottom: Math.round(margins.bottom * 1000),
+      left: Math.round(margins.left * 1000),
+    };
+  } else {
+    options.margins = { marginType: "default" };
+  }
+  return options;
+}
+
+function buildElectronPreviewOptions(settings = {}) {
+  const options = {
+    printBackground: settings.printBackground !== false,
+    pagesPerSheet: Math.round(clampNumber(settings.pagesPerSheet, 1, 16, 1)),
+  };
+  if (settings.orientation === "landscape") options.landscape = true;
+  if (settings.orientation === "portrait") options.landscape = false;
+  if (settings.paper && settings.paper !== "default") options.pageSize = settings.paper;
+  if (settings.scaleMode === "custom") options.scaleFactor = clampNumber(settings.scalePercent, 10, 400, 100);
+  if (settings.marginMode === "none") {
+    options.margins = { marginType: "none" };
+  } else if (settings.marginMode === "printable") {
+    options.margins = { marginType: "printableArea" };
+  } else if (settings.marginMode === "custom") {
+    const margins = sanitizeMargins(settings.margins);
+    options.margins = {
+      marginType: "custom",
+      top: Math.round(margins.top * 1000),
+      right: Math.round(margins.right * 1000),
+      bottom: Math.round(margins.bottom * 1000),
+      left: Math.round(margins.left * 1000),
+    };
+  } else {
+    options.margins = { marginType: "default" };
+  }
+  return options;
+}
+
+function readablePrintError(error) {
+  const message = error?.message || String(error || "");
+  if (/timeout|超时/i.test(message)) return "打印文档载入超时，请稍后重试。";
+  if (/invalid|settings|option/i.test(message)) return "打印设置无效，请检查纸张、页边距或缩放。";
+  if (/printer|device/i.test(message)) return "打印机不可用，请刷新打印机后重试。";
+  return message || "打印任务失败。";
+}
+
 function registerIpcHandlers() {
   ipcMain.handle("pdf-studio:open-files", async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
@@ -276,6 +493,90 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle("pdf-studio:uninstall", async () => uninstallApplication());
+
+  ipcMain.handle("pdf-studio:get-printers", async () => getPrintInfo());
+
+  ipcMain.handle("pdf-studio:save-print-preferences", async (_event, settings) => {
+    try {
+      const preferences = await savePrintPreferences(settings || {});
+      return { ok: true, preferences };
+    } catch (error) {
+      return { ok: false, message: "打印偏好保存失败。" };
+    }
+  });
+
+  ipcMain.handle("pdf-studio:cancel-print", async () => {
+    if (activePrintWindow && !activePrintWindow.isDestroyed()) {
+      destroyPrintWindow(activePrintWindow);
+    }
+    await cleanupAllPrintFiles();
+    return { ok: true };
+  });
+
+  ipcMain.handle("pdf-studio:print-preview", async (_event, pdfBytes, settings) => {
+    let pdfPath;
+    let win;
+    try {
+      pdfPath = await writeTempPrintPdf(pdfBytes);
+      win = await createPrintWindow(pdfPath);
+      const previewBytes = await win.webContents.printToPDF(buildElectronPreviewOptions(settings));
+      return { ok: true, data: new Uint8Array(previewBytes) };
+    } catch (error) {
+      return { ok: false, message: readablePrintError(error) };
+    } finally {
+      destroyPrintWindow(win);
+      await cleanupPrintFile(pdfPath);
+    }
+  });
+
+  ipcMain.handle("pdf-studio:print-document", async (_event, pdfBytes, settings) => {
+    let pdfPath;
+    let win;
+    try {
+      const printers = (await getPrintInfo()).printers;
+      if (!printers.some((printer) => printer.name === settings?.printerName)) {
+        return { ok: false, message: "打印机不可用，请刷新打印机后重试。" };
+      }
+      pdfPath = await writeTempPrintPdf(pdfBytes);
+      win = await createPrintWindow(pdfPath);
+      await savePrintPreferences(settings || {});
+      const result = await new Promise((resolve) => {
+        win.webContents.print(buildElectronPrintOptions(settings, { silent: true }), (success, failureReason) => {
+          resolve(success
+            ? { ok: true, message: "打印任务已发送。" }
+            : { ok: false, message: failureReason || "打印任务失败。" });
+        });
+      });
+      return result;
+    } catch (error) {
+      return { ok: false, message: readablePrintError(error) };
+    } finally {
+      destroyPrintWindow(win);
+      await cleanupPrintFile(pdfPath);
+    }
+  });
+
+  ipcMain.handle("pdf-studio:advanced-print", async (_event, pdfBytes, settings) => {
+    let pdfPath;
+    let win;
+    try {
+      pdfPath = await writeTempPrintPdf(pdfBytes);
+      win = await createPrintWindow(pdfPath);
+      const result = await new Promise((resolve) => {
+        win.webContents.print(buildElectronPrintOptions(settings, { silent: false }), (success, failureReason) => {
+          resolve(success
+            ? { ok: true, message: "打印任务已发送。" }
+            : { ok: false, message: failureReason || "打印任务已取消或失败。" });
+        });
+      });
+      return result;
+    } catch (error) {
+      return { ok: false, message: readablePrintError(error) };
+    } finally {
+      destroyPrintWindow(win);
+      await cleanupPrintFile(pdfPath);
+    }
+  });
 }
 
 function shellQuote(value) {
@@ -408,7 +709,7 @@ async function createWindow() {
     icon: path.join(__dirname, "build", "icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
-      contextIsolation: false,
+      contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
     },
@@ -478,5 +779,7 @@ if (!hasSingleInstanceLock) {
   app.on("window-all-closed", () => app.quit());
   app.on("before-quit", () => {
     if (closeApproved && localServer) localServer.close();
+    destroyPrintWindow(activePrintWindow);
+    cleanupAllPrintFiles();
   });
 }
