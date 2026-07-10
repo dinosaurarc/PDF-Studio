@@ -1547,7 +1547,7 @@ final class WebViewController: NSViewController, WKNavigationDelegate, WKUIDeleg
         nativeShell: true,
         portable: false,
         updateSupported: false,
-        currentVersion: "0.3.3"
+        currentVersion: "0.3.4"
       });
 
       window.pdfStudioNativeToggleFullscreen = async () => {

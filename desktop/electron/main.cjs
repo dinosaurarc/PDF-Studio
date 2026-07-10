@@ -221,7 +221,7 @@ function normalizePrinter(printer) {
     description: printer.description || "",
     status: printer.status || 0,
     isDefault: Boolean(printer.isDefault),
-    duplexSupported: Boolean(options["printer-is-accepting-jobs"] !== "false" && options.Duplex),
+    duplexSupported: options.Duplex === false || options.Duplex === "false" ? false : undefined,
     colorSupported: options["print-color-mode-supported"] || options["ColorModel"] || "",
     options,
   };
@@ -280,10 +280,12 @@ async function createPrintWindow(pdfPath) {
     show: false,
     width: 900,
     height: 1200,
+    backgroundColor: "#ffffff",
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      backgroundThrottling: false,
     },
   });
   activePrintWindow = win;
@@ -291,6 +293,110 @@ async function createPrintWindow(pdfPath) {
   await win.loadURL(pathToFileURL(pdfPath).href);
   await loaded;
   return win;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function buildDedicatedPrintHtml(job = {}) {
+  const pages = Array.isArray(job.pages) ? job.pages : [];
+  if (!pages.length) throw new Error("没有可打印页面。");
+  const firstWidth = clampNumber(pages[0].width, 1, 5000, 595.28);
+  const firstHeight = clampNumber(pages[0].height, 1, 5000, 841.89);
+  const pageMarkup = pages.map((page, index) => {
+    const width = clampNumber(page.width, 1, 5000, firstWidth);
+    const height = clampNumber(page.height, 1, 5000, firstHeight);
+    const dataUrl = String(page.dataUrl || "");
+    if (!dataUrl.startsWith("data:image/")) throw new Error(`第 ${index + 1} 页打印图像无效。`);
+    return `<section class="print-page" style="width:${width}pt;height:${height}pt"><img src="${dataUrl}" alt=""></section>`;
+  }).join("");
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>${escapeHtml(job.title || "PDF Studio Print Test")}</title>
+  <style>
+    :root { color-scheme: only light; background: #fff !important; }
+    @page { size: ${firstWidth}pt ${firstHeight}pt; margin: 0; }
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: ${firstWidth}pt;
+      min-height: ${firstHeight}pt;
+      background: #fff !important;
+      overflow: visible !important;
+    }
+    body {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .print-page {
+      display: block;
+      position: relative;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+      background: #fff !important;
+      box-shadow: none !important;
+      break-after: page;
+      page-break-after: always;
+    }
+    .print-page:last-child {
+      break-after: auto;
+      page-break-after: auto;
+    }
+    .print-page img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      object-fit: fill;
+      background: #fff !important;
+      box-shadow: none !important;
+    }
+  </style>
+</head>
+<body>${pageMarkup}</body>
+</html>`;
+}
+
+async function writeTempPrintHtml(html) {
+  const dir = await fsp.mkdtemp(path.join(app.getPath("temp"), "pdf-studio-print-html-"));
+  const filePath = path.join(dir, "print-document.html");
+  await fsp.writeFile(filePath, html, "utf8");
+  printTempFiles.add(filePath);
+  return filePath;
+}
+
+async function createDedicatedPrintWindow(htmlPath) {
+  const win = new BrowserWindow({
+    show: false,
+    width: 900,
+    height: 1200,
+    backgroundColor: "#ffffff",
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      backgroundThrottling: false,
+    },
+  });
+  activePrintWindow = win;
+  const loaded = waitForWebContentsLoad(win.webContents);
+  await win.loadURL(pathToFileURL(htmlPath).href);
+  await loaded;
+  return win;
+}
+
+function printTestOutputPath() {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  return path.join(app.getPath("documents"), `PDF-Studio-print-test-${stamp}.pdf`);
 }
 
 function destroyPrintWindow(win) {
@@ -305,7 +411,7 @@ function buildElectronPrintOptions(settings = {}, { silent = true } = {}) {
   const scalePercent = clampNumber(settings.scalePercent, 10, 400, 100);
   const options = {
     silent,
-    printBackground: settings.printBackground !== false,
+    printBackground: false,
     color: settings.color !== "gray",
     copies,
     collate: Boolean(settings.collate),
@@ -340,6 +446,11 @@ function buildElectronPrintOptions(settings = {}, { silent = true } = {}) {
     options.margins = { marginType: "default" };
   }
   return options;
+}
+
+function requiresInteractivePrintDialog(settings = {}) {
+  const name = String(settings.printerName || "").toLowerCase();
+  return /microsoft print to pdf|print to pdf|xps|onenote/.test(name);
 }
 
 function buildElectronPreviewOptions(settings = {}) {
@@ -529,21 +640,26 @@ function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle("pdf-studio:print-document", async (_event, pdfBytes, settings) => {
-    let pdfPath;
+  ipcMain.handle("pdf-studio:print-document", async (_event, printJob, settings) => {
+    let htmlPath;
     let win;
     try {
+      const interactive = requiresInteractivePrintDialog(settings);
       const printers = (await getPrintInfo()).printers;
-      if (!printers.some((printer) => printer.name === settings?.printerName)) {
+      if (!interactive && !printers.some((printer) => printer.name === settings?.printerName)) {
         return { ok: false, message: "打印机不可用，请刷新打印机后重试。" };
       }
-      pdfPath = await writeTempPrintPdf(pdfBytes);
-      win = await createPrintWindow(pdfPath);
+      const html = buildDedicatedPrintHtml(printJob);
+      htmlPath = await writeTempPrintHtml(html);
+      win = await createDedicatedPrintWindow(htmlPath);
       await savePrintPreferences(settings || {});
       const result = await new Promise((resolve) => {
-        win.webContents.print(buildElectronPrintOptions(settings, { silent: true }), (success, failureReason) => {
+        const options = buildElectronPrintOptions(settings, { silent: !interactive });
+        options.printBackground = true;
+        options.margins = { marginType: "none" };
+        win.webContents.print(options, (success, failureReason) => {
           resolve(success
-            ? { ok: true, message: "打印任务已发送。" }
+            ? { ok: true, message: interactive ? "系统打印窗口已打开。" : "打印任务已发送。" }
             : { ok: false, message: failureReason || "打印任务失败。" });
         });
       });
@@ -552,7 +668,7 @@ function registerIpcHandlers() {
       return { ok: false, message: readablePrintError(error) };
     } finally {
       destroyPrintWindow(win);
-      await cleanupPrintFile(pdfPath);
+      await cleanupPrintFile(htmlPath);
     }
   });
 
