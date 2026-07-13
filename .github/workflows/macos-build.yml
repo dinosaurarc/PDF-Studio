@@ -1,0 +1,70 @@
+name: Build macOS application
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+    env:
+      GH_OWNER: ${{ github.repository_owner }}
+      GH_REPO: ${{ github.event.repository.name }}
+      GH_TOKEN: ${{ github.token }}
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Confirm unsigned macOS build
+        run: |
+          echo "Building unsigned DMG and ZIP."
+          echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
+
+      - name: Prepare application files
+        run: |
+          node work/build-standalone.js
+          mkdir -p desktop/electron/app
+          cp outputs/pdf-page-studio/index.html desktop/electron/app/index.html
+
+      - name: Install desktop dependencies
+        working-directory: desktop/electron
+        run: npm install --no-audit --no-fund
+
+      - name: Build unsigned DMG and ZIP
+        working-directory: desktop/electron
+        run: npm run dist:mac
+
+      - name: Verify macOS files
+        working-directory: desktop/electron
+        run: |
+          test -n "$(find dist -maxdepth 1 -name '*.dmg' -print -quit)"
+          test -n "$(find dist -maxdepth 1 -name '*.zip' -print -quit)"
+          test -f dist/latest-mac.yml
+          test -n "$(find dist -maxdepth 1 -name '*.blockmap' -print -quit)"
+
+      - name: Generate SHA-256 checksums
+        working-directory: desktop/electron
+        run: |
+          find dist -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.yml' -o -name '*.blockmap' \) -print0 |
+            sort -z |
+            xargs -0 shasum -a 256 > dist/SHA256SUMS-macOS.txt
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: PDF-Studio-macOS
+          path: |
+            desktop/electron/dist/*.dmg
+            desktop/electron/dist/*.zip
+            desktop/electron/dist/latest-mac.yml
+            desktop/electron/dist/*.blockmap
+            desktop/electron/dist/SHA256SUMS-macOS.txt
+          if-no-files-found: error
