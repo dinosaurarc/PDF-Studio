@@ -1,0 +1,133 @@
+{
+  "name": "pdf-studio-desktop",
+  "version": "0.3.4",
+  "description": "PDF大编辑 / PDF Studio desktop application",
+  "main": "main.cjs",
+  "author": "PDF Studio",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win nsis portable --x64 --publish never",
+    "dist:mac": "electron-builder --mac dmg zip --universal --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "6.6.2"
+  },
+  "devDependencies": {
+    "electron": "39.0.0",
+    "electron-builder": "26.0.12"
+  },
+  "build": {
+    "appId": "com.pdfstudio.desktop",
+    "productName": "PDF大编辑",
+    "executableName": "PDF Studio",
+    "asar": true,
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "file-store.cjs",
+      "app/**/*",
+      "build/icon.png",
+      "build/icon.ico",
+      "build/icon.icns",
+      "README.txt"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "${env.GH_OWNER}",
+        "repo": "${env.GH_REPO}",
+        "releaseType": "release"
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "PDF-Studio-Windows-${version}-${arch}.${ext}"
+    },
+    "fileAssociations": [
+      {
+        "ext": "pdf",
+        "name": "PDF 文档",
+        "description": "使用 PDF大编辑打开 PDF 文档",
+        "mimeType": "application/pdf",
+        "role": "Editor"
+      }
+    ],
+    "nsis": {
+      "artifactName": "PDF-Studio-Windows-${version}-${arch}-Setup.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PDF大编辑",
+      "uninstallDisplayName": "PDF大编辑",
+      "deleteAppDataOnUninstall": true,
+      "include": "build/installer.nsh",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    },
+    "portable": {
+      "artifactName": "PDF-Studio-Windows-${version}-${arch}-Portable.${ext}"
+    },
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "artifactName": "PDF-Studio-macOS-${version}-${arch}.${ext}",
+      "extendInfo": {
+        "LSMinimumSystemVersion": "12.0",
+        "NSHighResolutionCapable": true
+      }
+    },
+    "dmg": {
+      "title": "PDF大编辑 ${version}",
+      "artifactName": "PDF-Studio-macOS-${version}-${arch}.${ext}",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
+  }
+}
