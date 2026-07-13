@@ -263,6 +263,7 @@ button {
 }
 
 .desktop-menu-item.hidden,
+.tool-btn.hidden,
 .narrow-print-item,
 .narrow-fullscreen-item,
 .narrow-search-item,
@@ -943,6 +944,22 @@ button {
   cursor: nwse-resize;
 }
 
+.annotation-rotate-handle {
+  position: absolute;
+  right: -9px;
+  top: -32px;
+  display: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: var(--focus);
+  color: #ffffff;
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+}
+
 .image-annotation .annotation-resize-handle {
   right: -9px;
   bottom: -9px;
@@ -993,6 +1010,10 @@ button {
 
 .annotation-item.selected .annotation-resize-handle {
   display: block;
+}
+
+.annotation-item.selected .annotation-rotate-handle {
+  display: grid;
 }
 
 .annotation-layer:not(.selection-mode) .annotation-resize-handle {
@@ -2660,6 +2681,7 @@ button {
             <button id="watermarkBtn" class="tool-btn"><i data-lucide="stamp"></i><span>水印</span></button>
             <button id="securityBtn" class="tool-btn"><i data-lucide="shield-check"></i><span>安全</span></button>
             <button id="wordExportBtn" class="tool-btn"><i data-lucide="file-text"></i><span>转word</span></button>
+            <button id="checkUpdateSideBtn" class="tool-btn desktop-only hidden"><i data-lucide="refresh-cw"></i><span>更新</span></button>
           </div>
         </section>
         <section class="meta-section">
@@ -2797,9 +2819,22 @@ button {
       <div id="securityDialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="securityDialogTitle">
         <div class="modal-card watermark-dialog-card">
           <h2 id="securityDialogTitle">PDF 安全设置</h2>
-          <p>当前免安装测试版还没有打包标准 PDF 加密写出引擎，因此不会伪造“已加密”的导出结果。PDF 权限限制本身也不是绝对防破解，后续接入 qpdf/pdfcpu 后会按标准权限位写入打开密码、权限密码和打印/复制/修改限制。</p>
+          <div class="watermark-grid">
+            <label><span>打开密码</span><input id="securityOpenPassword" type="password" autocomplete="new-password" placeholder="不设置则留空"></label>
+            <label><span>确认打开密码</span><input id="securityOpenPasswordConfirm" type="password" autocomplete="new-password"></label>
+            <label><span>权限密码</span><input id="securityOwnerPassword" type="password" autocomplete="new-password" placeholder="限制权限时建议设置"></label>
+            <label><span>确认权限密码</span><input id="securityOwnerPasswordConfirm" type="password" autocomplete="new-password"></label>
+            <label><span>打印权限</span><select id="securityPrintPermission"><option value="high">允许高质量打印</option><option value="low">只允许低质量打印</option><option value="none">禁止打印</option></select></label>
+            <label class="switch-label"><input id="securityRestrictModify" type="checkbox"><span>禁止修改</span></label>
+            <label class="switch-label"><input id="securityRestrictCopy" type="checkbox"><span>禁止复制</span></label>
+            <label class="switch-label"><input id="securityRestrictAnnotate" type="checkbox"><span>禁止注释</span></label>
+            <label class="switch-label"><input id="securityRestrictExtract" type="checkbox"><span>禁止页面提取</span></label>
+          </div>
+          <p class="export-dialog-note">密码仅保存在当前会话内存中，关闭软件后不会保留。PDF 权限限制不是绝对防破解，但会按标准 PDF 权限设置写出；如果当前构建缺少加密引擎，导出时会阻止生成“假加密”文件。</p>
           <div class="modal-actions">
-            <button id="securityCloseBtn" class="primary-btn">知道了</button>
+            <button id="securityClearBtn" class="wide-btn danger">清除安全设置</button>
+            <button id="securityCloseBtn" class="wide-btn">取消</button>
+            <button id="securityApplyBtn" class="primary-btn">应用</button>
           </div>
         </div>
       </div>
@@ -3099,6 +3134,7 @@ const els = {
   watermarkBtn: document.querySelector("#watermarkBtn"),
   securityBtn: document.querySelector("#securityBtn"),
   wordExportBtn: document.querySelector("#wordExportBtn"),
+  checkUpdateSideBtn: document.querySelector("#checkUpdateSideBtn"),
   selectToolBtn: document.querySelector("#selectToolBtn"),
   addTextBtn: document.querySelector("#addTextBtn"),
   addRectBtn: document.querySelector("#addRectBtn"),
@@ -3165,6 +3201,17 @@ const els = {
   watermarkDeleteBtn: document.querySelector("#watermarkDeleteBtn"),
   securityDialog: document.querySelector("#securityDialog"),
   securityCloseBtn: document.querySelector("#securityCloseBtn"),
+  securityApplyBtn: document.querySelector("#securityApplyBtn"),
+  securityClearBtn: document.querySelector("#securityClearBtn"),
+  securityOpenPassword: document.querySelector("#securityOpenPassword"),
+  securityOpenPasswordConfirm: document.querySelector("#securityOpenPasswordConfirm"),
+  securityOwnerPassword: document.querySelector("#securityOwnerPassword"),
+  securityOwnerPasswordConfirm: document.querySelector("#securityOwnerPasswordConfirm"),
+  securityPrintPermission: document.querySelector("#securityPrintPermission"),
+  securityRestrictModify: document.querySelector("#securityRestrictModify"),
+  securityRestrictCopy: document.querySelector("#securityRestrictCopy"),
+  securityRestrictAnnotate: document.querySelector("#securityRestrictAnnotate"),
+  securityRestrictExtract: document.querySelector("#securityRestrictExtract"),
   closeSaveBtn: document.querySelector("#closeSaveBtn"),
   closeDiscardBtn: document.querySelector("#closeDiscardBtn"),
   closeCancelBtn: document.querySelector("#closeCancelBtn"),
@@ -3255,6 +3302,7 @@ let renderToken = 0;
 let pendingCloseChoice = null;
 let printPreviewUrl = null;
 let printPreviewTimer = null;
+let fullscreenWheelTimer = 0;
 const fileHandles = new WeakMap();
 const nativeOpenKeys = new Set();
 const localFontSources = new Map();
@@ -3316,8 +3364,12 @@ async function configureDesktopFeatures() {
       els.menuPrintBtn.textContent = "打印";
     }
     els.checkUpdateBtn.classList.remove("hidden");
+    els.checkUpdateSideBtn?.classList.remove("hidden");
     els.uninstallBtn.classList.remove("hidden");
-    if (info?.portable) els.checkUpdateBtn.textContent = "检查更新（免安装版）";
+    if (info?.portable) {
+      els.checkUpdateBtn.textContent = "检查更新（免安装版）";
+      els.checkUpdateSideBtn.querySelector("span").textContent = "更新";
+    }
     window.pdfStudioOnUpdateState?.(applyUpdateState);
     window.pdfStudioOnNativeOpenPaths?.((handles, options) => window.pdfStudioOpenNativeHandles(handles, options));
   } catch (error) {
@@ -3432,6 +3484,16 @@ function handleFullscreenMouseMove(event) {
   } else if (event.clientY > 78 && !els.topbar?.matches(":hover, :focus-within")) {
     document.body.classList.remove("fullscreen-menu-visible");
   }
+}
+
+function handleFullscreenWheel(event) {
+  if (!isFullscreenActive() || !document.body.classList.contains("fullscreen-reader")) return;
+  if (!activeDoc().pages.length || Math.abs(event.deltaY) < 8) return;
+  event.preventDefault();
+  const now = Date.now();
+  if (now - fullscreenWheelTimer < 260) return;
+  fullscreenWheelTimer = now;
+  stepSelectedPage(event.deltaY > 0 ? 1 : -1);
 }
 
 window.pdfStudioNativeFullscreenChanged = (active) => {
@@ -3659,6 +3721,7 @@ function bindEvents() {
   els.menuSingleBtn.addEventListener("click", () => setModeFromMenu("single"));
   els.menuOverviewBtn.addEventListener("click", () => setModeFromMenu("overview"));
   els.checkUpdateBtn.addEventListener("click", checkForUpdates);
+  els.checkUpdateSideBtn?.addEventListener("click", checkForUpdates);
   els.uninstallBtn.addEventListener("click", openUninstallDialog);
   els.updateCloseBtn.addEventListener("click", closeUpdateDialog);
   els.updateActionBtn.addEventListener("click", handleUpdateAction);
@@ -3678,6 +3741,7 @@ function bindEvents() {
   els.previewWidthBtn.addEventListener("click", () => setPrintPreviewMode("width"));
   document.addEventListener("fullscreenchange", syncFullscreenButtons);
   document.addEventListener("mousemove", handleFullscreenMouseMove);
+  els.viewer.addEventListener("wheel", handleFullscreenWheel, { passive: false });
   els.searchBtn.addEventListener("click", searchText);
   els.searchInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") searchText();
@@ -3746,6 +3810,8 @@ function bindEvents() {
   els.watermarkApplyBtn.addEventListener("click", applyWatermarkFromDialog);
   els.watermarkDeleteBtn.addEventListener("click", deleteWatermark);
   els.securityCloseBtn.addEventListener("click", closeSecurityDialog);
+  els.securityApplyBtn.addEventListener("click", applySecuritySettings);
+  els.securityClearBtn.addEventListener("click", clearSecuritySettings);
   els.watermarkImageInput.addEventListener("change", handleWatermarkImageInput);
   [
     els.watermarkType,
@@ -4616,6 +4682,24 @@ function renderAnnotationLayer(page, container, scale) {
     resizeHandle.className = "annotation-resize-handle";
     resizeHandle.title = "调整大小";
     item.appendChild(resizeHandle);
+    if (annotation.type === "image") {
+      const rotateHandle = document.createElement("button");
+      rotateHandle.type = "button";
+      rotateHandle.className = "annotation-rotate-handle";
+      rotateHandle.title = "旋转图片";
+      rotateHandle.setAttribute("aria-label", "旋转图片");
+      rotateHandle.appendChild(lucide.createElement(lucide.icons.RotateCw, { width: 15, height: 15, "stroke-width": 2.4 }));
+      rotateHandle.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      rotateHandle.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        rotateImageAnnotation(annotation.id, 90);
+      });
+      item.appendChild(rotateHandle);
+    }
     bindAnnotationPointerEvents(item, annotation, container, resizeHandle, moveHandle);
     container.appendChild(item);
     if (annotation.type === "text") {
@@ -5343,11 +5427,61 @@ function closeWatermarkDialog() {
 }
 
 function openSecurityDialog() {
+  const security = activeDoc().security || {};
+  els.securityOpenPassword.value = security.openPassword || "";
+  els.securityOpenPasswordConfirm.value = security.openPassword || "";
+  els.securityOwnerPassword.value = security.ownerPassword || "";
+  els.securityOwnerPasswordConfirm.value = security.ownerPassword || "";
+  els.securityPrintPermission.value = security.printPermission || "high";
+  els.securityRestrictModify.checked = Boolean(security.restrictModify);
+  els.securityRestrictCopy.checked = Boolean(security.restrictCopy);
+  els.securityRestrictAnnotate.checked = Boolean(security.restrictAnnotate);
+  els.securityRestrictExtract.checked = Boolean(security.restrictExtract);
   els.securityDialog.classList.remove("hidden");
+  els.securityOpenPassword.focus();
 }
 
 function closeSecurityDialog() {
   els.securityDialog.classList.add("hidden");
+}
+
+function applySecuritySettings() {
+  const openPassword = els.securityOpenPassword.value;
+  const ownerPassword = els.securityOwnerPassword.value;
+  if (openPassword !== els.securityOpenPasswordConfirm.value) return showToast("两次打开密码不一致。");
+  if (ownerPassword !== els.securityOwnerPasswordConfirm.value) return showToast("两次权限密码不一致。");
+  const restrictModify = els.securityRestrictModify.checked;
+  const restrictCopy = els.securityRestrictCopy.checked;
+  const restrictAnnotate = els.securityRestrictAnnotate.checked;
+  const restrictExtract = els.securityRestrictExtract.checked;
+  const printPermission = els.securityPrintPermission.value;
+  const hasRestrictions = restrictModify || restrictCopy || restrictAnnotate || restrictExtract || printPermission !== "high";
+  if (!openPassword && hasRestrictions && !ownerPassword) return showToast("设置权限限制时请填写权限密码。");
+  recordUndo("修改安全设置");
+  activeDoc().security = (openPassword || ownerPassword || hasRestrictions)
+    ? {
+        openPassword,
+        ownerPassword,
+        printPermission,
+        restrictModify,
+        restrictCopy,
+        restrictAnnotate,
+        restrictExtract,
+      }
+    : null;
+  closeSecurityDialog();
+  showToast("安全设置已保存，导出时会校验加密写出能力。");
+}
+
+function clearSecuritySettings() {
+  if (!activeDoc().security) {
+    closeSecurityDialog();
+    return;
+  }
+  recordUndo("清除安全设置");
+  activeDoc().security = null;
+  closeSecurityDialog();
+  showToast("安全设置已清除。");
 }
 
 function defaultWatermarkConfig() {
@@ -5622,6 +5756,17 @@ function deleteSelectedAnnotation() {
   state.selectedAnnotationId = null;
   refreshAnnotationLayerForPage(entry.pageIndex);
   updateAnnotationControls();
+}
+
+function rotateImageAnnotation(annotationId, delta = 90) {
+  const entry = selectedAnnotationEntry();
+  if (!entry || entry.annotation.id !== annotationId || entry.annotation.type !== "image") return;
+  recordUndo("旋转图片");
+  entry.annotation.rotation = normalizeRotation((entry.annotation.rotation || 0) + delta);
+  state.selectedAnnotationId = entry.annotation.id;
+  refreshAnnotationLayerForPage(entry.pageIndex);
+  updateAnnotationControls();
+  invalidatePrintCaches();
 }
 
 function bindAnnotationControls() {
@@ -9046,7 +9191,364 @@ async function buildPdfBytes(pages, onProgress = () => {}) {
     onProgress(index + 1, pages.length);
     if (index % 3 === 2) await wait(0);
   }
-  return out.save({ useObjectStreams: true });
+  const hasSecurity = pages.some((page) => {
+    const doc = state.documents.find((candidate) => candidate.pages.some((item) => item.id === page.id));
+    return doc?.security?.openPassword;
+  });
+  const bytes = await out.save({ useObjectStreams: !hasSecurity });
+  return applyPdfSecurityIfNeeded(bytes, pages);
+}
+
+async function applyPdfSecurityIfNeeded(bytes, pages) {
+  const doc = state.documents.find((candidate) => pages.some((page) => candidate.pages.some((item) => item.id === page.id))) || activeDoc();
+  if (!doc?.security) return bytes;
+  if (doc.security.openPassword) return encryptPdfWithPassword(bytes, doc.security);
+  if (window.pdfStudioEncryptPdf) {
+    const result = await window.pdfStudioEncryptPdf(bytes, doc.security);
+    if (result?.ok && result.bytes) return result.bytes;
+    throw new Error(result?.message || "PDF 加密写出失败。");
+  }
+  throw new Error("当前安装包缺少标准 PDF 加密写出引擎，已阻止导出未加密文件。");
+}
+
+function encryptPdfWithPassword(inputBytes, security) {
+  const source = bytesToBinaryString(inputBytes instanceof Uint8Array ? inputBytes : new Uint8Array(inputBytes));
+  const objects = parsePdfIndirectObjects(source);
+  if (!objects.length) throw new Error("无法解析 PDF 对象，未生成加密文件。");
+  const trailer = parsePdfTrailer(source);
+  if (!trailer.root) throw new Error("无法读取 PDF 根对象，未生成加密文件。");
+  const maxObjectNumber = Math.max(...objects.map((object) => object.number));
+  const encryptObjectNumber = maxObjectNumber + 1;
+  const fileId = randomPdfFileId();
+  const permissions = pdfPermissionValue(security);
+  const ownerPassword = security.ownerPassword || security.openPassword || "";
+  const ownerEntry = computePdfOwnerEntry(security.openPassword || "", ownerPassword);
+  const encryptionKey = computePdfEncryptionKey(security.openPassword || "", ownerEntry, permissions, fileId);
+  const userEntry = rc4(encryptionKey, PDF_PASSWORD_PADDING);
+  const encryptedObjects = objects.map((object) => ({
+    ...object,
+    body: encryptPdfObjectBody(object.body, object.number, object.generation, encryptionKey),
+  }));
+  encryptedObjects.push({
+    number: encryptObjectNumber,
+    generation: 0,
+    body: `<< /Filter /Standard /V 1 /R 2 /O <${bytesToHex(ownerEntry)}> /U <${bytesToHex(userEntry)}> /P ${permissions} >>\n`,
+  });
+  const headerMatch = source.match(/^%PDF-[^\r\n]+[\r\n]+(?:%[^\r\n]*[\r\n]+)?/);
+  let output = headerMatch ? headerMatch[0] : "%PDF-1.4\n%\xFF\xFF\xFF\xFF\n";
+  const offsets = new Map();
+  encryptedObjects
+    .sort((a, b) => a.number - b.number || a.generation - b.generation)
+    .forEach((object) => {
+      offsets.set(object.number, output.length);
+      output += `${object.number} ${object.generation} obj\n${object.body}`;
+      if (!object.body.endsWith("\n")) output += "\n";
+      output += "endobj\n";
+    });
+  const xrefOffset = output.length;
+  const size = encryptObjectNumber + 1;
+  output += `xref\n0 ${size}\n0000000000 65535 f \n`;
+  for (let number = 1; number < size; number += 1) {
+    const offset = offsets.get(number);
+    output += offset == null ? "0000000000 65535 f \n" : `${String(offset).padStart(10, "0")} 00000 n \n`;
+  }
+  output += "trailer\n<<\n";
+  output += `/Size ${size}\n/Root ${trailer.root}\n/Encrypt ${encryptObjectNumber} 0 R\n`;
+  if (trailer.info) output += `/Info ${trailer.info}\n`;
+  output += `/ID [<${bytesToHex(fileId)}> <${bytesToHex(fileId)}>]\n`;
+  output += `>>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  return binaryStringToBytes(output);
+}
+
+const PDF_PASSWORD_PADDING = new Uint8Array([
+  0x28, 0xbf, 0x4e, 0x5e, 0x4e, 0x75, 0x8a, 0x41,
+  0x64, 0x00, 0x4e, 0x56, 0xff, 0xfa, 0x01, 0x08,
+  0x2e, 0x2e, 0x00, 0xb6, 0xd0, 0x68, 0x3e, 0x80,
+  0x2f, 0x0c, 0xa9, 0xfe, 0x64, 0x53, 0x69, 0x7a,
+]);
+
+function parsePdfIndirectObjects(source) {
+  const objects = [];
+  const pattern = /(\d+)\s+(\d+)\s+obj\s*([\s\S]*?)\s*endobj/g;
+  let match;
+  while ((match = pattern.exec(source))) {
+    objects.push({
+      number: Number(match[1]),
+      generation: Number(match[2]),
+      body: match[3],
+    });
+  }
+  return objects;
+}
+
+function parsePdfTrailer(source) {
+  const tail = source.slice(Math.max(0, source.lastIndexOf("trailer")));
+  return {
+    root: tail.match(/\/Root\s+(\d+\s+\d+\s+R)/)?.[1] || "",
+    info: tail.match(/\/Info\s+(\d+\s+\d+\s+R)/)?.[1] || "",
+  };
+}
+
+function encryptPdfObjectBody(body, objectNumber, generation, encryptionKey) {
+  const streamIndex = body.indexOf("stream");
+  if (streamIndex >= 0) {
+    const streamDataStart = streamIndex + 6 + (body[streamIndex + 6] === "\r" && body[streamIndex + 7] === "\n" ? 2 : body[streamIndex + 6] === "\n" ? 1 : 0);
+    const length = Number(body.slice(0, streamIndex).match(/\/Length\s+(\d+)/)?.[1]);
+    if (Number.isFinite(length) && length >= 0 && streamDataStart + length <= body.length) {
+      const prefix = encryptPdfStringsInBody(body.slice(0, streamDataStart), objectNumber, generation, encryptionKey);
+      const data = binaryStringToBytes(body.slice(streamDataStart, streamDataStart + length));
+      const encryptedData = rc4(pdfObjectKey(encryptionKey, objectNumber, generation), data);
+      const suffix = body.slice(streamDataStart + length);
+      return prefix + bytesToBinaryString(encryptedData) + suffix;
+    }
+  }
+  return encryptPdfStringsInBody(body, objectNumber, generation, encryptionKey);
+}
+
+function encryptPdfStringsInBody(body, objectNumber, generation, encryptionKey) {
+  const key = pdfObjectKey(encryptionKey, objectNumber, generation);
+  let output = "";
+  for (let index = 0; index < body.length; index += 1) {
+    const char = body[index];
+    if (char === "(") {
+      const parsed = readPdfLiteralString(body, index);
+      if (parsed) {
+        output += `<${bytesToHex(rc4(key, parsed.bytes))}>`;
+        index = parsed.end;
+        continue;
+      }
+    }
+    if (char === "<" && body[index + 1] !== "<") {
+      const end = body.indexOf(">", index + 1);
+      if (end > index) {
+        const raw = body.slice(index + 1, end).replace(/\s+/g, "");
+        if (/^[0-9a-fA-F]*$/.test(raw)) {
+          output += `<${bytesToHex(rc4(key, hexToBytes(raw)))}>`;
+          index = end;
+          continue;
+        }
+      }
+    }
+    output += char;
+  }
+  return output;
+}
+
+function readPdfLiteralString(source, start) {
+  let depth = 1;
+  const bytes = [];
+  for (let index = start + 1; index < source.length; index += 1) {
+    const code = source.charCodeAt(index) & 0xff;
+    const char = source[index];
+    if (char === "\\") {
+      index += 1;
+      if (index >= source.length) break;
+      const escaped = source[index];
+      const escapedCode = source.charCodeAt(index) & 0xff;
+      if (escaped === "n") bytes.push(0x0a);
+      else if (escaped === "r") bytes.push(0x0d);
+      else if (escaped === "t") bytes.push(0x09);
+      else if (escaped === "b") bytes.push(0x08);
+      else if (escaped === "f") bytes.push(0x0c);
+      else if (escaped === "\r" || escaped === "\n") {
+        if (escaped === "\r" && source[index + 1] === "\n") index += 1;
+      } else if (/[0-7]/.test(escaped)) {
+        let octal = escaped;
+        for (let count = 0; count < 2 && /[0-7]/.test(source[index + 1] || ""); count += 1) {
+          octal += source[index + 1];
+          index += 1;
+        }
+        bytes.push(parseInt(octal, 8) & 0xff);
+      } else {
+        bytes.push(escapedCode);
+      }
+      continue;
+    }
+    if (char === "(") {
+      depth += 1;
+      bytes.push(code);
+      continue;
+    }
+    if (char === ")") {
+      depth -= 1;
+      if (depth === 0) return { bytes: new Uint8Array(bytes), end: index };
+      bytes.push(code);
+      continue;
+    }
+    bytes.push(code);
+  }
+  return null;
+}
+
+function pdfPermissionValue(security) {
+  let permissions = 0xfffffffc;
+  if (security.printPermission === "none") permissions &= ~0x04;
+  if (security.restrictModify) permissions &= ~0x08;
+  if (security.restrictCopy || security.restrictExtract) permissions &= ~0x10;
+  if (security.restrictAnnotate) permissions &= ~0x20;
+  return permissions > 0x7fffffff ? permissions - 0x100000000 : permissions;
+}
+
+function computePdfOwnerEntry(userPassword, ownerPassword) {
+  const ownerKey = md5(padPdfPassword(ownerPassword)).slice(0, 5);
+  return rc4(ownerKey, padPdfPassword(userPassword));
+}
+
+function computePdfEncryptionKey(userPassword, ownerEntry, permissions, fileId) {
+  const data = concatBytes(
+    padPdfPassword(userPassword),
+    ownerEntry,
+    int32LittleEndian(permissions),
+    fileId,
+  );
+  return md5(data).slice(0, 5);
+}
+
+function pdfObjectKey(encryptionKey, objectNumber, generation) {
+  const data = concatBytes(encryptionKey, new Uint8Array([
+    objectNumber & 0xff,
+    (objectNumber >> 8) & 0xff,
+    (objectNumber >> 16) & 0xff,
+    generation & 0xff,
+    (generation >> 8) & 0xff,
+  ]));
+  return md5(data).slice(0, Math.min(16, encryptionKey.length + 5));
+}
+
+function padPdfPassword(password) {
+  const bytes = new TextEncoder().encode(String(password || ""));
+  const out = new Uint8Array(32);
+  out.set(bytes.slice(0, 32));
+  if (bytes.length < 32) out.set(PDF_PASSWORD_PADDING.slice(0, 32 - bytes.length), bytes.length);
+  return out;
+}
+
+function rc4(key, data) {
+  const state = new Uint8Array(256);
+  for (let index = 0; index < 256; index += 1) state[index] = index;
+  let j = 0;
+  for (let index = 0; index < 256; index += 1) {
+    j = (j + state[index] + key[index % key.length]) & 0xff;
+    [state[index], state[j]] = [state[j], state[index]];
+  }
+  const out = new Uint8Array(data.length);
+  let i = 0;
+  j = 0;
+  for (let offset = 0; offset < data.length; offset += 1) {
+    i = (i + 1) & 0xff;
+    j = (j + state[i]) & 0xff;
+    [state[i], state[j]] = [state[j], state[i]];
+    out[offset] = data[offset] ^ state[(state[i] + state[j]) & 0xff];
+  }
+  return out;
+}
+
+function md5(input) {
+  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  const bitLength = bytes.length * 8;
+  const paddedLength = (((bytes.length + 8) >> 6) + 1) << 6;
+  const buffer = new Uint8Array(paddedLength);
+  buffer.set(bytes);
+  buffer[bytes.length] = 0x80;
+  const view = new DataView(buffer.buffer);
+  view.setUint32(paddedLength - 8, bitLength >>> 0, true);
+  view.setUint32(paddedLength - 4, Math.floor(bitLength / 0x100000000), true);
+  let a = 0x67452301;
+  let b = 0xefcdab89;
+  let c = 0x98badcfe;
+  let d = 0x10325476;
+  const shifts = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21];
+  const table = Array.from({ length: 64 }, (_, index) => Math.floor(Math.abs(Math.sin(index + 1)) * 0x100000000) >>> 0);
+  for (let offset = 0; offset < buffer.length; offset += 64) {
+    const words = Array.from({ length: 16 }, (_, index) => view.getUint32(offset + index * 4, true));
+    let aa = a;
+    let bb = b;
+    let cc = c;
+    let dd = d;
+    for (let index = 0; index < 64; index += 1) {
+      let f;
+      let g;
+      if (index < 16) {
+        f = (bb & cc) | (~bb & dd);
+        g = index;
+      } else if (index < 32) {
+        f = (dd & bb) | (~dd & cc);
+        g = (5 * index + 1) % 16;
+      } else if (index < 48) {
+        f = bb ^ cc ^ dd;
+        g = (3 * index + 5) % 16;
+      } else {
+        f = cc ^ (bb | ~dd);
+        g = (7 * index) % 16;
+      }
+      const rotate = shifts[Math.floor(index / 16) * 4 + (index % 4)];
+      const next = dd;
+      dd = cc;
+      cc = bb;
+      bb = (bb + leftRotate((aa + f + table[index] + words[g]) >>> 0, rotate)) >>> 0;
+      aa = next;
+    }
+    a = (a + aa) >>> 0;
+    b = (b + bb) >>> 0;
+    c = (c + cc) >>> 0;
+    d = (d + dd) >>> 0;
+  }
+  const out = new Uint8Array(16);
+  const outView = new DataView(out.buffer);
+  [a, b, c, d].forEach((value, index) => outView.setUint32(index * 4, value, true));
+  return out;
+}
+
+function leftRotate(value, count) {
+  return ((value << count) | (value >>> (32 - count))) >>> 0;
+}
+
+function randomPdfFileId() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return bytes;
+}
+
+function int32LittleEndian(value) {
+  const bytes = new Uint8Array(4);
+  new DataView(bytes.buffer).setInt32(0, value, true);
+  return bytes;
+}
+
+function concatBytes(...parts) {
+  const length = parts.reduce((total, part) => total + part.length, 0);
+  const out = new Uint8Array(length);
+  let offset = 0;
+  parts.forEach((part) => {
+    out.set(part, offset);
+    offset += part.length;
+  });
+  return out;
+}
+
+function bytesToHex(bytes) {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function hexToBytes(hex) {
+  const clean = hex.length % 2 ? `${hex}0` : hex;
+  const out = new Uint8Array(clean.length / 2);
+  for (let index = 0; index < out.length; index += 1) out[index] = parseInt(clean.slice(index * 2, index * 2 + 2), 16);
+  return out;
+}
+
+function bytesToBinaryString(bytes) {
+  let out = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    out += String.fromCharCode(...bytes.slice(index, index + 0x8000));
+  }
+  return out;
+}
+
+function binaryStringToBytes(value) {
+  const out = new Uint8Array(value.length);
+  for (let index = 0; index < value.length; index += 1) out[index] = value.charCodeAt(index) & 0xff;
+  return out;
 }
 
 function drawAnnotations(ctx, page, width, height, scale) {
