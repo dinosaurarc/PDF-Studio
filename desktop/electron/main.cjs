@@ -260,6 +260,34 @@ async function cleanupAllPrintFiles() {
   await Promise.all([...printTempFiles].map((filePath) => cleanupPrintFile(filePath)));
 }
 
+async function inspectPrintFile(filePath) {
+  const info = { path: filePath || "", exists: false, size: 0 };
+  if (!filePath) return info;
+  try {
+    const stat = await fsp.stat(filePath);
+    info.exists = stat.isFile();
+    info.size = stat.size;
+  } catch {
+    info.exists = false;
+    info.size = 0;
+  }
+  return info;
+}
+
+function formatPrintDiagnostics(info = {}, failure = {}) {
+  return [
+    `print-document.html 是否存在：${info.exists ? "是" : "否"}`,
+    `文件大小：${Number.isFinite(info.size) ? info.size : 0} 字节`,
+    `使用的完整路径：${info.path || "无"}`,
+    `did-fail-load errorCode：${failure.errorCode ?? "无"}`,
+    `did-fail-load errorDescription：${failure.errorDescription || "无"}`,
+  ].join("\n");
+}
+
+function createPrintDiagnosticsError(title, info, failure = {}) {
+  return new Error(`${title}\n${formatPrintDiagnostics(info, failure)}`);
+}
+
 function waitForWebContentsLoad(webContents) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("打印文档载入超时。")), 30000);
@@ -271,6 +299,28 @@ function waitForWebContentsLoad(webContents) {
     webContents.once("did-fail-load", (_event, _code, description) => {
       clearTimeout(timer);
       reject(new Error(description || "打印文档载入失败。"));
+    });
+  });
+}
+
+function waitForPrintHtmlLoad(webContents, htmlPath) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(async () => {
+      reject(createPrintDiagnosticsError("临时打印页面加载失败", await inspectPrintFile(htmlPath), {
+        errorCode: "timeout",
+        errorDescription: "打印页面加载超时",
+      }));
+    }, 30000);
+    webContents.once("did-finish-load", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    webContents.once("did-fail-load", async (_event, errorCode, errorDescription) => {
+      clearTimeout(timer);
+      reject(createPrintDiagnosticsError("临时打印页面加载失败", await inspectPrintFile(htmlPath), {
+        errorCode,
+        errorDescription,
+      }));
     });
   });
 }
@@ -367,11 +417,25 @@ function buildDedicatedPrintHtml(job = {}) {
 }
 
 async function writeTempPrintHtml(html) {
-  const dir = await fsp.mkdtemp(path.join(app.getPath("temp"), "pdf-studio-print-html-"));
+  const dir = path.join(app.getPath("userData"), "print-jobs", `job-${Date.now()}-${crypto.randomUUID()}`);
   const filePath = path.join(dir, "print-document.html");
-  await fsp.writeFile(filePath, html, "utf8");
-  printTempFiles.add(filePath);
-  return filePath;
+  try {
+    await fsp.mkdir(dir, { recursive: true });
+    await fsp.writeFile(filePath, html, "utf8");
+    const info = await inspectPrintFile(filePath);
+    if (!info.exists || info.size <= 0) {
+      throw createPrintDiagnosticsError("临时打印文件生成失败", info);
+    }
+    printTempFiles.add(filePath);
+    return filePath;
+  } catch (error) {
+    const info = await inspectPrintFile(filePath);
+    await fsp.rm(dir, { recursive: true, force: true }).catch(() => {});
+    if (String(error?.message || "").startsWith("临时打印文件生成失败")) throw error;
+    throw createPrintDiagnosticsError("临时打印文件生成失败", info, {
+      errorDescription: error?.message || String(error || "写入失败"),
+    });
+  }
 }
 
 async function createDedicatedPrintWindow(htmlPath) {
@@ -388,8 +452,8 @@ async function createDedicatedPrintWindow(htmlPath) {
     },
   });
   activePrintWindow = win;
-  const loaded = waitForWebContentsLoad(win.webContents);
-  await win.loadURL(pathToFileURL(htmlPath).href);
+  const loaded = waitForPrintHtmlLoad(win.webContents, htmlPath);
+  await win.loadFile(htmlPath);
   await loaded;
   return win;
 }
@@ -483,6 +547,7 @@ function buildElectronPreviewOptions(settings = {}) {
 
 function readablePrintError(error) {
   const message = error?.message || String(error || "");
+  if (/^(临时打印文件生成失败|临时打印页面加载失败|打印机未响应)/.test(message)) return message;
   if (/timeout|超时/i.test(message)) return "打印文档载入超时，请稍后重试。";
   if (/invalid|settings|option/i.test(message)) return "打印设置无效，请检查纸张、页边距或缩放。";
   if (/printer|device/i.test(message)) return "打印机不可用，请刷新打印机后重试。";
@@ -657,7 +722,15 @@ function registerIpcHandlers() {
         const options = buildElectronPrintOptions(settings, { silent: !interactive });
         options.printBackground = true;
         options.margins = { marginType: "none" };
-        win.webContents.print(options, (success, failureReason) => {
+        win.webContents.print(options, async (success, failureReason) => {
+          if (!success) {
+            const info = await inspectPrintFile(htmlPath);
+            const error = createPrintDiagnosticsError("打印机未响应", info, {
+              errorDescription: failureReason || "Electron print callback returned failure",
+            });
+            resolve({ ok: false, message: error.message });
+            return;
+          }
           resolve(success
             ? { ok: true, message: interactive ? "系统打印窗口已打开。" : "打印任务已发送。" }
             : { ok: false, message: failureReason || "打印任务失败。" });

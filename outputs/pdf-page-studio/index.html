@@ -952,12 +952,21 @@ button {
   place-items: center;
   width: 24px;
   height: 24px;
+  padding: 0;
   border: 2px solid #ffffff;
   border-radius: 999px;
   background: var(--focus);
   color: #ffffff;
+  line-height: 0;
   box-shadow: var(--shadow-soft);
   cursor: pointer;
+}
+
+.annotation-rotate-handle svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+  pointer-events: none;
 }
 
 .image-annotation .annotation-resize-handle {
@@ -1814,6 +1823,10 @@ button {
   display: none;
 }
 
+.password-dialog {
+  z-index: 50;
+}
+
 .modal-card {
   width: min(420px, 100%);
   padding: 20px;
@@ -1832,6 +1845,13 @@ button {
   margin: 0 0 18px;
   color: var(--muted);
   line-height: 1.5;
+}
+
+.password-error {
+  min-height: 18px;
+  margin: 8px 0 0;
+  color: #b3261e;
+  font-size: 13px;
 }
 
 .watermark-dialog-card {
@@ -2677,9 +2697,8 @@ button {
             <button id="rotateLeftBtn" class="tool-btn"><i data-lucide="rotate-ccw"></i><span>左转</span></button>
             <button id="rotateRightBtn" class="tool-btn"><i data-lucide="rotate-cw"></i><span>右转</span></button>
             <button id="deleteBtn" class="tool-btn danger"><i data-lucide="trash-2"></i><span>删除</span></button>
-            <button id="duplicateBtn" class="tool-btn"><i data-lucide="copy-plus"></i><span>复制</span></button>
             <button id="watermarkBtn" class="tool-btn"><i data-lucide="stamp"></i><span>水印</span></button>
-            <button id="securityBtn" class="tool-btn"><i data-lucide="shield-check"></i><span>安全</span></button>
+            <button id="securityBtn" class="tool-btn"><i data-lucide="shield-check"></i><span>加密</span></button>
             <button id="wordExportBtn" class="tool-btn"><i data-lucide="file-text"></i><span>转word</span></button>
             <button id="checkUpdateSideBtn" class="tool-btn desktop-only hidden"><i data-lucide="refresh-cw"></i><span>更新</span></button>
           </div>
@@ -2702,10 +2721,11 @@ button {
         <input id="textCustomColorInput" class="text-custom-color-input" type="color" value="#202124" aria-label="更多文字颜色">
       </div>
       <div id="pageContextMenu" class="export-menu page-context-menu hidden" role="menu">
-        <button id="contextDuplicatePageBtn" role="menuitem">复制此页到剪贴板</button>
-        <button id="contextExportPdfBtn" role="menuitem">导出此页 PDF</button>
-        <button id="contextExportPngBtn" role="menuitem">导出此页 PNG</button>
-        <button id="contextExportJpgBtn" role="menuitem">导出此页 JPG</button>
+        <button id="contextDuplicatePageBtn" role="menuitem">复制</button>
+        <button id="contextPastePageBtn" role="menuitem">粘贴</button>
+        <button id="contextExportPdfBtn" class="hidden" role="menuitem">导出此页 PDF</button>
+        <button id="contextExportPngBtn" class="hidden" role="menuitem">导出此页 PNG</button>
+        <button id="contextExportJpgBtn" class="hidden" role="menuitem">导出此页 JPG</button>
       </div>
       <div id="closeDialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="closeDialogTitle">
         <div class="modal-card">
@@ -2835,6 +2855,18 @@ button {
             <button id="securityClearBtn" class="wide-btn danger">清除安全设置</button>
             <button id="securityCloseBtn" class="wide-btn">取消</button>
             <button id="securityApplyBtn" class="primary-btn">应用</button>
+          </div>
+        </div>
+      </div>
+      <div id="passwordDialog" class="modal-backdrop password-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="passwordDialogTitle">
+        <div class="modal-card">
+          <h2 id="passwordDialogTitle">请输入 PDF 打开密码</h2>
+          <p id="passwordDialogMessage">这个 PDF 已加密，需要输入密码后才能打开。</p>
+          <label><span>密码</span><input id="passwordInput" type="password" autocomplete="current-password"></label>
+          <p id="passwordError" class="password-error"></p>
+          <div class="modal-actions">
+            <button id="passwordCancelBtn" class="wide-btn">取消</button>
+            <button id="passwordSubmitBtn" class="primary-btn">打开</button>
           </div>
         </div>
       </div>
@@ -3130,7 +3162,6 @@ const els = {
   rotateLeftBtn: document.querySelector("#rotateLeftBtn"),
   rotateRightBtn: document.querySelector("#rotateRightBtn"),
   deleteBtn: document.querySelector("#deleteBtn"),
-  duplicateBtn: document.querySelector("#duplicateBtn"),
   watermarkBtn: document.querySelector("#watermarkBtn"),
   securityBtn: document.querySelector("#securityBtn"),
   wordExportBtn: document.querySelector("#wordExportBtn"),
@@ -3174,6 +3205,7 @@ const els = {
   textCustomColorInput: document.querySelector("#textCustomColorInput"),
   pageContextMenu: document.querySelector("#pageContextMenu"),
   contextDuplicatePageBtn: document.querySelector("#contextDuplicatePageBtn"),
+  contextPastePageBtn: document.querySelector("#contextPastePageBtn"),
   contextExportPdfBtn: document.querySelector("#contextExportPdfBtn"),
   contextExportPngBtn: document.querySelector("#contextExportPngBtn"),
   contextExportJpgBtn: document.querySelector("#contextExportJpgBtn"),
@@ -3212,6 +3244,13 @@ const els = {
   securityRestrictCopy: document.querySelector("#securityRestrictCopy"),
   securityRestrictAnnotate: document.querySelector("#securityRestrictAnnotate"),
   securityRestrictExtract: document.querySelector("#securityRestrictExtract"),
+  passwordDialog: document.querySelector("#passwordDialog"),
+  passwordDialogTitle: document.querySelector("#passwordDialogTitle"),
+  passwordDialogMessage: document.querySelector("#passwordDialogMessage"),
+  passwordInput: document.querySelector("#passwordInput"),
+  passwordError: document.querySelector("#passwordError"),
+  passwordCancelBtn: document.querySelector("#passwordCancelBtn"),
+  passwordSubmitBtn: document.querySelector("#passwordSubmitBtn"),
   closeSaveBtn: document.querySelector("#closeSaveBtn"),
   closeDiscardBtn: document.querySelector("#closeDiscardBtn"),
   closeCancelBtn: document.querySelector("#closeCancelBtn"),
@@ -3300,6 +3339,7 @@ let navigatorUpdateFrame;
 let exportEstimateToken = 0;
 let renderToken = 0;
 let pendingCloseChoice = null;
+let pendingPasswordRequest = null;
 let printPreviewUrl = null;
 let printPreviewTimer = null;
 let fullscreenWheelTimer = 0;
@@ -3758,7 +3798,6 @@ function bindEvents() {
   els.rotateLeftBtn.addEventListener("click", () => rotateSelected(-90));
   els.rotateRightBtn.addEventListener("click", () => rotateSelected(90));
   els.deleteBtn.addEventListener("click", deleteSelected);
-  els.duplicateBtn.addEventListener("click", duplicateSelected);
   els.wordExportBtn.addEventListener("click", openWordExportDialog);
   els.exportConfirmBtn.addEventListener("click", confirmExport);
   els.exportCancelBtn.addEventListener("click", closeExportDialog);
@@ -3812,6 +3851,17 @@ function bindEvents() {
   els.securityCloseBtn.addEventListener("click", closeSecurityDialog);
   els.securityApplyBtn.addEventListener("click", applySecuritySettings);
   els.securityClearBtn.addEventListener("click", clearSecuritySettings);
+  els.passwordCancelBtn.addEventListener("click", () => resolvePdfPasswordRequest(null));
+  els.passwordSubmitBtn.addEventListener("click", submitPdfPassword);
+  els.passwordInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      submitPdfPassword();
+    }
+  });
+  els.passwordDialog.addEventListener("click", (event) => {
+    if (event.target === els.passwordDialog) resolvePdfPasswordRequest(null);
+  });
   els.watermarkImageInput.addEventListener("change", handleWatermarkImageInput);
   [
     els.watermarkType,
@@ -3830,9 +3880,18 @@ function bindEvents() {
     control.addEventListener("change", scheduleWatermarkDraftPreview);
   });
   els.contextDuplicatePageBtn.addEventListener("click", copyContextPageToClipboard);
+  els.contextPastePageBtn.addEventListener("click", pasteContextPages);
   els.contextExportPdfBtn.addEventListener("click", () => exportContextPage("pdf"));
   els.contextExportPngBtn.addEventListener("click", () => exportContextPage("png"));
   els.contextExportJpgBtn.addEventListener("click", () => exportContextPage("jpeg"));
+  els.thumbList.addEventListener("contextmenu", (event) => {
+    if (event.target.closest(".thumb-item[data-index]")) return;
+    openPasteContextMenu(event);
+  });
+  els.viewer.addEventListener("contextmenu", (event) => {
+    if (state.mode !== "overview" || event.target.closest(".page-frame[data-index]")) return;
+    openPasteContextMenu(event);
+  });
   els.loadLocalFontsBtn.addEventListener("click", loadLocalFonts);
   bindAnnotationControls();
   document.addEventListener("click", (event) => {
@@ -3886,6 +3945,11 @@ function bindEvents() {
     if (event.key === "Escape" && !els.printDialog.classList.contains("hidden")) {
       event.preventDefault();
       closePrintPreview();
+      return;
+    }
+    if (event.key === "Escape" && !els.passwordDialog.classList.contains("hidden")) {
+      event.preventDefault();
+      resolvePdfPasswordRequest(null);
       return;
     }
     if (pendingCloseChoice && event.key === "Escape") {
@@ -4296,7 +4360,7 @@ async function addFiles(files, options = {}) {
 }
 
 async function addPdf(file, bytes, doc = activeDoc(), onProgress = () => {}) {
-  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;
+  const pdf = await loadPdfDocumentWithPassword(bytes, file.name);
   const pageCount = pdf.numPages;
   if (!pageCount) throw new Error("文件中没有页面");
   for (let i = 0; i < pageCount; i += 1) {
@@ -4318,6 +4382,73 @@ async function addPdf(file, bytes, doc = activeDoc(), onProgress = () => {}) {
   }
   doc.sourceCount += 1;
   if (doc.selectedIndex < 0 && doc.pages.length) doc.selectedIndex = 0;
+}
+
+async function loadPdfDocumentWithPassword(bytes, fileName) {
+  let password;
+  let hasPrompted = false;
+  for (;;) {
+    try {
+      return await pdfjsLib.getDocument({
+        data: new Uint8Array(bytes.slice(0)),
+        password,
+      }).promise;
+    } catch (error) {
+      if (!isPdfPasswordError(error)) throw error;
+      const nextPassword = await requestPdfOpenPassword(fileName, hasPrompted || isIncorrectPdfPasswordError(error));
+      if (nextPassword === null) throw new Error("已取消输入密码。");
+      password = nextPassword;
+      hasPrompted = true;
+    }
+  }
+}
+
+function isPdfPasswordError(error) {
+  const responses = pdfjsLib.PasswordResponses || {};
+  return error?.name === "PasswordException"
+    || error?.code === responses.NEED_PASSWORD
+    || error?.code === responses.INCORRECT_PASSWORD
+    || /password/i.test(error?.message || "");
+}
+
+function isIncorrectPdfPasswordError(error) {
+  const responses = pdfjsLib.PasswordResponses || {};
+  return error?.code === responses.INCORRECT_PASSWORD
+    || /incorrect|invalid|wrong/i.test(error?.message || "");
+}
+
+function requestPdfOpenPassword(fileName, isRetry = false) {
+  if (pendingPasswordRequest) resolvePdfPasswordRequest(null);
+  return new Promise((resolve) => {
+    pendingPasswordRequest = resolve;
+    els.passwordDialogTitle.textContent = isRetry ? "PDF 密码不正确" : "请输入 PDF 打开密码";
+    els.passwordDialogMessage.textContent = `“${shortName(fileName || "PDF 文件", 44)}” 已加密，需要输入打开密码。`;
+    els.passwordError.textContent = isRetry ? "密码不正确，请重新输入。" : "";
+    els.passwordInput.value = "";
+    els.passwordDialog.classList.remove("hidden");
+    requestAnimationFrame(() => els.passwordInput.focus());
+  });
+}
+
+function submitPdfPassword() {
+  if (!pendingPasswordRequest) return;
+  const password = els.passwordInput.value;
+  if (!password) {
+    els.passwordError.textContent = "请输入密码。";
+    els.passwordInput.focus();
+    return;
+  }
+  resolvePdfPasswordRequest(password);
+}
+
+function resolvePdfPasswordRequest(value) {
+  if (!pendingPasswordRequest) return;
+  const resolve = pendingPasswordRequest;
+  pendingPasswordRequest = null;
+  els.passwordDialog.classList.add("hidden");
+  els.passwordInput.value = "";
+  els.passwordError.textContent = "";
+  resolve(value);
 }
 
 function reportFileOpenError(error) {
@@ -4622,6 +4753,7 @@ function renderAnnotationLayer(page, container, scale) {
     item.style.top = `${annotation.y * 100}%`;
     item.style.width = `${annotation.width * 100}%`;
     item.style.height = `${annotation.height * 100}%`;
+    if (annotation.type === "image") styleImageAnnotationFrame(item, annotation);
     item.classList.toggle("controls-below", annotation.y < 0.05);
 
     if (annotation.type === "text") {
@@ -4689,18 +4821,10 @@ function renderAnnotationLayer(page, container, scale) {
       rotateHandle.title = "旋转图片";
       rotateHandle.setAttribute("aria-label", "旋转图片");
       rotateHandle.appendChild(lucide.createElement(lucide.icons.RotateCw, { width: 15, height: 15, "stroke-width": 2.4 }));
-      rotateHandle.addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-      });
-      rotateHandle.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        rotateImageAnnotation(annotation.id, 90);
-      });
+      bindImageRotationHandle(rotateHandle, item, annotation, page);
       item.appendChild(rotateHandle);
     }
-    bindAnnotationPointerEvents(item, annotation, container, resizeHandle, moveHandle);
+    bindAnnotationPointerEvents(item, annotation, container, resizeHandle, moveHandle, page);
     container.appendChild(item);
     if (annotation.type === "text") {
       requestAnimationFrame(() => autoExpandTextAnnotation(item.querySelector(".annotation-text-content"), annotation));
@@ -4710,29 +4834,110 @@ function renderAnnotationLayer(page, container, scale) {
   else if (canDrawHere) bindDrawingLayer(page, container, scale);
 }
 
-function styleImageAnnotationElement(image, annotation, page) {
+function styleImageAnnotationFrame(item, annotation) {
   const rotation = normalizeRotation(annotation.rotation || 0);
-  image.style.transform = rotation ? `rotate(${rotation}deg)` : "";
-  image.style.transformOrigin = "center center";
-  if (rotation === 90 || rotation === 270) {
-    const dimensions = visualPageDimensions(page);
-    const boxWidth = Math.max(1, annotation.width * dimensions.width);
-    const boxHeight = Math.max(1, annotation.height * dimensions.height);
-    const ratio = Math.max(0.001, boxWidth / boxHeight);
-    image.style.width = `${100 / ratio}%`;
-    image.style.height = `${100 * ratio}%`;
-    image.style.position = "absolute";
-    image.style.left = "50%";
-    image.style.top = "50%";
-    image.style.translate = "-50% -50%";
-  } else {
-    image.style.width = "100%";
-    image.style.height = "100%";
-    image.style.position = "";
-    image.style.left = "";
-    image.style.top = "";
-    image.style.translate = "";
-  }
+  item.style.transform = rotation ? `rotate(${rotation}deg)` : "";
+  item.style.transformOrigin = "center center";
+}
+
+function styleImageAnnotationElement(image) {
+  image.style.transform = "";
+  image.style.transformOrigin = "";
+  image.style.width = "100%";
+  image.style.height = "100%";
+  image.style.position = "";
+  image.style.left = "";
+  image.style.top = "";
+  image.style.translate = "";
+}
+
+function pointerAngleAroundElement(event, element) {
+  const rect = element.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
+  return Math.atan2(event.clientY - centerY, event.clientX - centerX) * 180 / Math.PI;
+}
+
+function signedRotationDelta(value) {
+  return ((value + 180) % 360 + 360) % 360 - 180;
+}
+
+function snapRotationToQuarter(value) {
+  return normalizeRotation(Math.round(normalizeRotation(value) / 90) * 90);
+}
+
+function isQuarterTurnFrame(rotation) {
+  const normalized = normalizeRotation(rotation);
+  return normalized === 90 || normalized === 270;
+}
+
+function bindImageRotationHandle(handle, item, annotation, page) {
+  handle.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const pageIndex = Number(item.closest(".page-frame")?.dataset.index);
+    if (Number.isInteger(pageIndex)) selectPage(pageIndex, false, "preserve");
+    selectAnnotation(annotation.id);
+
+    const image = item.querySelector(".annotation-image-content");
+    const startAngle = pointerAngleAroundElement(event, item);
+    const startRotation = normalizeRotation(annotation.rotation || 0);
+    const original = {
+      x: annotation.x,
+      y: annotation.y,
+      width: annotation.width,
+      height: annotation.height,
+      rotation: startRotation,
+    };
+    let changed = false;
+    let lastRotation = startRotation;
+    let lastSnap = event.shiftKey;
+    handle.setPointerCapture(event.pointerId);
+
+    const move = (moveEvent) => {
+      const pointerDelta = signedRotationDelta(pointerAngleAroundElement(moveEvent, item) - startAngle);
+      if (!changed && Math.abs(pointerDelta) > 1.5) {
+        recordUndo("鏃嬭浆鍥剧墖");
+        changed = true;
+      }
+      if (!changed) return;
+      lastSnap = moveEvent.shiftKey;
+      lastRotation = lastSnap ? snapRotationToQuarter(startRotation + pointerDelta) : normalizeRotation(startRotation + pointerDelta);
+      annotation.rotation = lastRotation;
+      styleImageAnnotationFrame(item, annotation);
+      if (image) styleImageAnnotationElement(image, annotation, page);
+    };
+
+    const end = (endEvent) => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", end);
+      handle.removeEventListener("pointercancel", end);
+      if (!changed) {
+        rotateImageAnnotation(annotation.id, 90);
+        return;
+      }
+      const finalSnap = endEvent?.shiftKey ?? lastSnap;
+      const finalRotation = finalSnap ? snapRotationToQuarter(lastRotation) : normalizeRotation(lastRotation);
+      annotation.x = original.x;
+      annotation.y = original.y;
+      annotation.width = original.width;
+      annotation.height = original.height;
+      annotation.rotation = original.rotation;
+      if (finalSnap) {
+        setImageAnnotationRotation(annotation, page, finalRotation, { adjustRightAngleFrame: true });
+      } else {
+        annotation.rotation = finalRotation;
+      }
+      state.selectedAnnotationId = annotation.id;
+      if (Number.isInteger(pageIndex)) refreshAnnotationLayerForPage(pageIndex);
+      updateAnnotationControls();
+      invalidatePrintCaches();
+    };
+
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+  });
 }
 
 function bindTextPlacementLayer(page, layer) {
@@ -4910,7 +5115,7 @@ function drawingPointFromEvent(event, rect) {
   };
 }
 
-function bindAnnotationPointerEvents(item, annotation, layer, resizeHandle, moveHandle) {
+function bindAnnotationPointerEvents(item, annotation, layer, resizeHandle, moveHandle, page) {
   item.addEventListener("pointerdown", (event) => {
     if (event.target === resizeHandle) return;
     const movingFromHandle = Boolean(moveHandle && event.target.closest(".annotation-move-handle"));
@@ -4984,6 +5189,10 @@ function bindAnnotationPointerEvents(item, annotation, layer, resizeHandle, move
       }
       item.style.width = `${annotation.width * 100}%`;
       item.style.height = `${annotation.height * 100}%`;
+      if (annotation.type === "image") {
+        const image = item.querySelector(".annotation-image-content");
+        if (image) styleImageAnnotationElement(image, annotation, page);
+      }
       if (annotation.type === "text") {
         autoExpandTextAnnotation(item.querySelector(".annotation-text-content"), annotation);
       }
@@ -5762,11 +5971,21 @@ function rotateImageAnnotation(annotationId, delta = 90) {
   const entry = selectedAnnotationEntry();
   if (!entry || entry.annotation.id !== annotationId || entry.annotation.type !== "image") return;
   recordUndo("旋转图片");
-  entry.annotation.rotation = normalizeRotation((entry.annotation.rotation || 0) + delta);
+  rotateImageAnnotationFrame(entry.annotation, entry.page, delta);
   state.selectedAnnotationId = entry.annotation.id;
   refreshAnnotationLayerForPage(entry.pageIndex);
   updateAnnotationControls();
   invalidatePrintCaches();
+}
+
+function rotateImageAnnotationFrame(annotation, page, delta) {
+  const previousRotation = normalizeRotation(annotation.rotation || 0);
+  const nextRotation = normalizeRotation(previousRotation + delta);
+  setImageAnnotationRotation(annotation, page, nextRotation, { adjustRightAngleFrame: true });
+}
+
+function setImageAnnotationRotation(annotation, page, nextRotation, { adjustRightAngleFrame = false } = {}) {
+  annotation.rotation = normalizeRotation(nextRotation);
 }
 
 function bindAnnotationControls() {
@@ -6813,25 +7032,6 @@ function deleteSelected() {
   renderAll({ keepScroll: true });
 }
 
-function duplicateSelected() {
-  const entries = selectedPageEntries();
-  if (!entries.length) return;
-  recordUndo(entries.length > 1 ? "复制多个页面" : "复制页面");
-  const duplicates = entries.map(({ page }) => {
-    const duplicate = clonePage(page);
-    duplicate.id = makeId();
-    duplicate.annotations = duplicate.annotations.map((annotation) => ({ ...annotation, id: makeId() }));
-    return duplicate;
-  });
-  const insertAt = entries[entries.length - 1].index + 1;
-  activeDoc().pages.splice(insertAt, 0, ...duplicates);
-  activeDoc().selectedIndex = insertAt;
-  activeDoc().selectedPageIds = duplicates.map((page) => page.id);
-  activeDoc().selectionAnchorIndex = insertAt;
-  state.selectedAnnotationId = null;
-  renderAll({ keepScroll: true });
-}
-
 function clonePagesForInsert(pages) {
   return pages.map((page) => {
     const duplicate = clonePage(page);
@@ -6941,8 +7141,12 @@ function imageAnnotationAspect(annotation, layerRect) {
   return Math.max(0.001, (annotation.width * layerRect.width) / Math.max(1, annotation.height * layerRect.height));
 }
 
+function imageAnnotationVisualAspect(annotation, layerRect) {
+  return imageAnnotationAspect(annotation, layerRect);
+}
+
 function resizeImageProportionally(annotation, originalWidth, originalHeight, dx, dy, layerRect) {
-  const imageAspect = imageAnnotationAspect(annotation, layerRect);
+  const imageAspect = imageAnnotationVisualAspect(annotation, layerRect);
   const pageRatio = Math.max(0.001, layerRect.width / Math.max(1, layerRect.height));
   const maxWidth = Math.max(0.02, 1 - annotation.x);
   const maxHeight = Math.max(0.02, 1 - annotation.y);
@@ -7213,6 +7417,7 @@ function isModalOpen() {
     els.uninstallDialog,
     els.watermarkDialog,
     els.securityDialog,
+    els.passwordDialog,
     els.printDialog,
   ].some((element) => element && !element.classList.contains("hidden"));
 }
@@ -7415,6 +7620,31 @@ function openPageContextMenu(event, pageIndex) {
   closeOtherMenu();
   state.contextPageIndex = pageIndex;
   selectPage(pageIndex, false, "replace");
+  configurePageContextMenu("copy");
+  positionPageContextMenu(event);
+}
+
+function openPasteContextMenu(event) {
+  if (!activeDoc().pages.length) return;
+  event.preventDefault();
+  event.stopPropagation();
+  closeExportMenu();
+  closeOtherMenu();
+  state.contextPageIndex = -1;
+  configurePageContextMenu("paste");
+  positionPageContextMenu(event);
+}
+
+function configurePageContextMenu(mode) {
+  els.contextDuplicatePageBtn.classList.toggle("hidden", mode !== "copy");
+  els.contextPastePageBtn.classList.toggle("hidden", mode !== "paste");
+  els.contextPastePageBtn.disabled = !state.pageClipboard.length;
+  els.contextExportPdfBtn.classList.add("hidden");
+  els.contextExportPngBtn.classList.add("hidden");
+  els.contextExportJpgBtn.classList.add("hidden");
+}
+
+function positionPageContextMenu(event) {
   const menu = els.pageContextMenu;
   menu.classList.remove("hidden");
   const rect = menu.getBoundingClientRect();
@@ -7426,6 +7656,7 @@ function openPageContextMenu(event, pageIndex) {
 
 function closePageContextMenu() {
   els.pageContextMenu.classList.add("hidden");
+  els.contextPastePageBtn.disabled = false;
   state.contextPageIndex = -1;
 }
 
@@ -7439,16 +7670,13 @@ async function copyContextPageToClipboard() {
   const entry = contextPageEntry();
   closePageContextMenu();
   if (!entry) return;
-  showLoading("正在复制页面…", 30);
-  try {
-    const blob = await pageImageBlob(entry.page, "png", "original");
-    await copyImageBlobToClipboard(blob);
-    showToast("已复制此页图片到剪贴板。");
-  } catch (error) {
-    showToast(error?.message || "复制到剪贴板失败。");
-  } finally {
-    hideLoading();
-  }
+  state.pageClipboard = [clonePage(entry.page)];
+  showToast("已复制页面。");
+}
+
+function pasteContextPages() {
+  closePageContextMenu();
+  pastePagesAfterSelection();
 }
 
 async function copyImageBlobToClipboard(blob) {
@@ -9395,7 +9623,7 @@ function computePdfOwnerEntry(userPassword, ownerPassword) {
 }
 
 function computePdfEncryptionKey(userPassword, ownerEntry, permissions, fileId) {
-  const data = concatBytes(
+  const data = concatPdfBytes(
     padPdfPassword(userPassword),
     ownerEntry,
     int32LittleEndian(permissions),
@@ -9405,7 +9633,7 @@ function computePdfEncryptionKey(userPassword, ownerEntry, permissions, fileId) 
 }
 
 function pdfObjectKey(encryptionKey, objectNumber, generation) {
-  const data = concatBytes(encryptionKey, new Uint8Array([
+  const data = concatPdfBytes(encryptionKey, new Uint8Array([
     objectNumber & 0xff,
     (objectNumber >> 8) & 0xff,
     (objectNumber >> 16) & 0xff,
@@ -9515,7 +9743,7 @@ function int32LittleEndian(value) {
   return bytes;
 }
 
-function concatBytes(...parts) {
+function concatPdfBytes(...parts) {
   const length = parts.reduce((total, part) => total + part.length, 0);
   const out = new Uint8Array(length);
   let offset = 0;
@@ -9696,9 +9924,7 @@ function drawAnnotationToCanvas(ctx, annotation, width, height, scale, loadedIma
       const rotation = normalizeRotation(annotation.rotation || 0);
       ctx.translate(x + boxWidth / 2, y + boxHeight / 2);
       ctx.rotate((rotation * Math.PI) / 180);
-      const drawWidth = rotation === 90 || rotation === 270 ? boxHeight : boxWidth;
-      const drawHeight = rotation === 90 || rotation === 270 ? boxWidth : boxHeight;
-      ctx.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      ctx.drawImage(image, -boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight);
     }
   } else if (annotation.type === "highlight") {
     if (annotation.noColor) {
@@ -10150,7 +10376,6 @@ function updateUi() {
     els.rotateLeftBtn,
     els.rotateRightBtn,
     els.deleteBtn,
-    els.duplicateBtn,
     els.wordExportBtn,
     els.addTextBtn,
     els.addRectBtn,
