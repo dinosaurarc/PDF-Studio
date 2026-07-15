@@ -6974,15 +6974,19 @@ function rotateSelected(delta) {
 function rotatePageAnnotations(page, delta) {
   const rotation = normalizeRotation(delta);
   if (!rotation || !page.annotations?.length) return;
-  page.annotations = page.annotations.map((annotation) => rotateAnnotation(annotation, rotation));
+  page.annotations = page.annotations.map((annotation) => rotateAnnotation(annotation, rotation, page));
 }
 
-function rotateAnnotation(annotation, rotation) {
+function rotateAnnotation(annotation, rotation, page = null) {
   if (annotation.type === "draw" || annotation.type === "line") {
     return {
       ...annotation,
       points: (annotation.points || []).map((point) => rotateAnnotationPoint(point, rotation)),
     };
+  }
+
+  if (annotation.type === "image" && page) {
+    return rotateImageAnnotationWithPage(annotation, rotation, page);
   }
 
   const corners = [
@@ -7002,6 +7006,38 @@ function rotateAnnotation(annotation, rotation) {
     width: clamp(maxX - minX, 0.001, 1),
     height: clamp(maxY - minY, 0.001, 1),
     rotation: annotation.type === "image" ? normalizeRotation((annotation.rotation || 0) + rotation) : annotation.rotation,
+  };
+}
+
+function pageDimensionsAtRotation(page, rotation) {
+  const rotated = Math.abs(normalizeRotation(rotation) % 180) === 90;
+  return {
+    width: rotated ? page.height : page.width,
+    height: rotated ? page.width : page.height,
+  };
+}
+
+function rotateImageAnnotationWithPage(annotation, rotation, page) {
+  const nextPageRotation = normalizeRotation(page.rotation || 0);
+  const previousPageRotation = normalizeRotation(nextPageRotation - rotation);
+  const previousDimensions = pageDimensionsAtRotation(page, previousPageRotation);
+  const nextDimensions = pageDimensionsAtRotation(page, nextPageRotation);
+  const center = rotateAnnotationPoint({
+    x: annotation.x + annotation.width / 2,
+    y: annotation.y + annotation.height / 2,
+  }, rotation);
+  let width = (annotation.width * previousDimensions.width) / Math.max(1, nextDimensions.width);
+  let height = (annotation.height * previousDimensions.height) / Math.max(1, nextDimensions.height);
+  const fitScale = Math.min(1, 1 / Math.max(width, 0.001), 1 / Math.max(height, 0.001));
+  width = clamp(width * fitScale, 0.001, 1);
+  height = clamp(height * fitScale, 0.001, 1);
+  return {
+    ...annotation,
+    x: clamp(center.x - width / 2, 0, Math.max(0, 1 - width)),
+    y: clamp(center.y - height / 2, 0, Math.max(0, 1 - height)),
+    width,
+    height,
+    rotation: normalizeRotation((annotation.rotation || 0) + rotation),
   };
 }
 
