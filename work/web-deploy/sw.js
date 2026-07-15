@@ -1,4 +1,4 @@
-const CACHE_NAME = "pdf-studio-web-0.3.4";
+const CACHE_NAME = "pdf-studio-web-0.3.5";
 const CORE_FILES = [
   "./",
   "./index.html",

@@ -1,6 +1,6 @@
 {
   "name": "pdf-studio-desktop",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "PDF大编辑 / PDF Studio desktop application",
   "main": "main.cjs",
   "author": "PDF Studio",

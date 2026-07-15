@@ -37,7 +37,7 @@ GitHub Pages 会通过 [pages.yml](.github/workflows/pages.yml) 自动构建和�
 
 Windows 和 macOS 桌面安装包不会在普通提交时自动生成，避免说明文档或小改动反复创建 Release。桌面包只在以下两种情况生成：
 
-- 推送新的版本标签，例如 `v0.3.4`
+- 推送新的版本标签，例如 `v0.3.5`
 - 在 GitHub Actions 页面手动运行桌面打包流程
 
 正式版本标签会自动创建 GitHub Release，并附加 Windows Setup、Portable、`latest.yml`、macOS DMG、更新 ZIP、`latest-mac.yml` 和 blockmap。
@@ -49,10 +49,10 @@ Windows 和 macOS 桌面安装包不会在普通提交时自动生成，避免�
 先同步版本号：
 
 ```bash
-node work/set-version.js 0.3.4
+node work/set-version.js 0.3.5
 ```
 
-提交并推送到 `main` 后，网页会先自动发布。然后在 GitHub 网页创建并推送同名标签，例如 `v0.3.4`。标签推送后会创建对应 Release，并上传
+提交并推送到 `main` 后，网页会先自动发布。然后在 GitHub 网页创建并推送同名标签，例如 `v0.3.5`。标签推送后会创建对应 Release，并上传
 Windows Setup、Portable、`latest.yml`、macOS DMG、更新 ZIP、`latest-mac.yml` 和 blockmap。
 
 未配置签名资料时，自动流程仍会生成可手动下载的 macOS DMG/ZIP。
