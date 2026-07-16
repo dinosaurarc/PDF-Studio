@@ -54,13 +54,15 @@
 
         function captureFeature(featureName) {
           const safeFeatureName = sanitizeFeatureName(featureName);
-          if (!safeFeatureName || !posthogReady || !window.posthog?.capture) return;
+          if (!safeFeatureName || !window.posthog?.capture) return;
           try {
+            console.log("Sending feature_used", safeFeatureName);
             window.posthog.capture("feature_used", {
               feature_name: safeFeatureName,
               app_version: APP_VERSION,
               platform: "web",
             });
+            console.log("PostHog capture called");
           } catch (error) {
             console.warn("PostHog feature capture failed", error);
           }
@@ -103,20 +105,19 @@
                 advanced_disable_decide: true,
                 persistence: "memory",
                 before_send: (event) => {
-                  if (event?.event !== "feature_used") return null;
+                  if (event?.event !== "feature_used") return event;
                   const featureName = sanitizeFeatureName(event.properties?.feature_name);
                   if (!featureName) return null;
-                  return {
-                    ...event,
-                    properties: {
-                      feature_name: featureName,
-                      app_version: APP_VERSION,
-                      platform: "web",
-                    },
+                  event.properties = {
+                    feature_name: featureName,
+                    app_version: APP_VERSION,
+                    platform: "web",
                   };
+                  return event;
                 },
                 loaded: () => {
                   posthogReady = true;
+                  console.log("PostHog initialized for PDF Studio web");
                 },
               });
             } catch (error) {
