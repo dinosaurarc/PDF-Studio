@@ -53,38 +53,20 @@
         }
 
         function captureFeature(featureName) {
-          const safeFeatureName = sanitizeFeatureName(featureName);
-          if (!safeFeatureName || !window.posthog?.capture) return;
+          featureName = sanitizeFeatureName(featureName);
+          if (!featureName || !window.posthog?.capture) return;
           try {
-            console.log("Sending feature_used", safeFeatureName);
+            console.log("Sending feature_used", featureName);
             window.posthog.capture("feature_used", {
-              feature_name: safeFeatureName,
-              app_version: APP_VERSION,
+              feature_name: featureName,
+              app_version: "0.3.5",
               platform: "web",
+              $process_person_profile: false,
             });
             console.log("PostHog capture called");
           } catch (error) {
             console.warn("PostHog feature capture failed", error);
           }
-        }
-
-        function featureForClick(target) {
-          if (!target?.id) return "";
-          if (target.id === "exportConfirmBtn") {
-            const format = document.querySelector('input[name="exportFormat"]:checked')?.value || "pdf";
-            if (format === "docx") return "convert_word";
-            if (format === "png" || format === "jpeg") return "export_image";
-            return "export_pdf";
-          }
-          return FEATURE_BY_BUTTON_ID[target.id] || "";
-        }
-
-        function setupManualFeatureTracking() {
-          document.addEventListener("click", (event) => {
-            const target = event.target?.closest?.("button");
-            const featureName = featureForClick(target);
-            if (featureName) captureFeature(featureName);
-          }, true);
         }
 
         function loadPostHog() {
@@ -110,8 +92,9 @@
                   if (!featureName) return null;
                   event.properties = {
                     feature_name: featureName,
-                    app_version: APP_VERSION,
+                    app_version: "0.3.5",
                     platform: "web",
+                    $process_person_profile: false,
                   };
                   return event;
                 },
@@ -133,11 +116,6 @@
         }
 
         window.pdfStudioTrackFeature = captureFeature;
-        if (document.readyState === "loading") {
-          document.addEventListener("DOMContentLoaded", setupManualFeatureTracking, { once: true });
-        } else {
-          setupManualFeatureTracking();
-        }
         loadPostHog();
       })();
     </script>
@@ -3827,10 +3805,32 @@ async function confirmUninstall() {
   }
 }
 
+function trackFeature(featureName) {
+  try {
+    window.pdfStudioTrackFeature?.(featureName);
+  } catch (error) {
+    console.warn("PostHog feature tracking failed", error);
+  }
+}
+
+function trackExportFeature() {
+  const format = els.exportDialog.querySelector('input[name="exportFormat"]:checked')?.value || "pdf";
+  if (format === "docx") trackFeature("convert_word");
+  else if (format === "png" || format === "jpeg") trackFeature("export_image");
+  else trackFeature("export_pdf");
+}
+
 function bindEvents() {
-  els.openBtn.addEventListener("click", openFiles);
-  els.emptyOpenBtn.addEventListener("click", openFiles);
+  els.openBtn.addEventListener("click", () => {
+    trackFeature("open_pdf");
+    openFiles();
+  });
+  els.emptyOpenBtn.addEventListener("click", () => {
+    trackFeature("open_pdf");
+    openFiles();
+  });
   els.addBtn.addEventListener("click", () => {
+    trackFeature("open_pdf");
     fileInputMode = "append";
     els.fileInput.value = "";
     els.fileInput.click();
@@ -3869,25 +3869,48 @@ function bindEvents() {
     });
   });
 
-  els.savePdfBtn.addEventListener("click", saveFullPdf);
+  els.savePdfBtn.addEventListener("click", () => {
+    trackFeature("save");
+    saveFullPdf();
+  });
   els.exportBtn.addEventListener("click", (event) => {
+    trackFeature("export_pdf");
     event.stopPropagation();
     toggleExportMenu();
   });
-  els.exportAllMenuBtn.addEventListener("click", () => openExportDialog("all"));
-  els.exportSelectedMenuBtn.addEventListener("click", () => openExportDialog("selected"));
-  els.printBtn?.addEventListener("click", printFullPdf);
-  els.fullScreenBtn.addEventListener("click", toggleFullscreen);
+  els.exportAllMenuBtn.addEventListener("click", () => {
+    trackFeature("export_pdf");
+    openExportDialog("all");
+  });
+  els.exportSelectedMenuBtn.addEventListener("click", () => {
+    trackFeature("export_pdf");
+    openExportDialog("selected");
+  });
+  els.printBtn?.addEventListener("click", () => {
+    trackFeature("print");
+    printFullPdf();
+  });
+  els.fullScreenBtn.addEventListener("click", () => {
+    trackFeature("fullscreen");
+    toggleFullscreen();
+  });
   els.otherBtn.addEventListener("click", (event) => {
     event.stopPropagation();
     toggleOtherMenu();
   });
   els.menuPrintBtn.addEventListener("click", () => {
+    trackFeature("print");
     closeOtherMenu();
     printFullPdf();
   });
-  els.menuFullScreenBtn.addEventListener("click", toggleFullscreen);
-  els.menuSearchBtn.addEventListener("click", openCompactSearch);
+  els.menuFullScreenBtn.addEventListener("click", () => {
+    trackFeature("fullscreen");
+    toggleFullscreen();
+  });
+  els.menuSearchBtn.addEventListener("click", () => {
+    trackFeature("search");
+    openCompactSearch();
+  });
   els.menuZoomOutBtn.addEventListener("click", () => adjustZoomFromMenu(-10));
   els.menuZoomInBtn.addEventListener("click", () => adjustZoomFromMenu(10));
   els.menuFitBtn.addEventListener("click", () => {
@@ -3919,7 +3942,10 @@ function bindEvents() {
   document.addEventListener("fullscreenchange", syncFullscreenButtons);
   document.addEventListener("mousemove", handleFullscreenMouseMove);
   els.viewer.addEventListener("wheel", handleFullscreenWheel, { passive: false });
-  els.searchBtn.addEventListener("click", searchText);
+  els.searchBtn.addEventListener("click", () => {
+    trackFeature("search");
+    searchText();
+  });
   els.searchInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") searchText();
   });
@@ -3932,11 +3958,26 @@ function bindEvents() {
   els.closeDialog.addEventListener("click", (event) => {
     if (event.target === els.closeDialog) resolveCloseChoice("cancel");
   });
-  els.rotateLeftBtn.addEventListener("click", () => rotateSelected(-90));
-  els.rotateRightBtn.addEventListener("click", () => rotateSelected(90));
-  els.deleteBtn.addEventListener("click", deleteSelected);
-  els.wordExportBtn.addEventListener("click", openWordExportDialog);
-  els.exportConfirmBtn.addEventListener("click", confirmExport);
+  els.rotateLeftBtn.addEventListener("click", () => {
+    trackFeature("rotate_left");
+    rotateSelected(-90);
+  });
+  els.rotateRightBtn.addEventListener("click", () => {
+    trackFeature("rotate_right");
+    rotateSelected(90);
+  });
+  els.deleteBtn.addEventListener("click", () => {
+    trackFeature("delete_page");
+    deleteSelected();
+  });
+  els.wordExportBtn.addEventListener("click", () => {
+    trackFeature("convert_word");
+    openWordExportDialog();
+  });
+  els.exportConfirmBtn.addEventListener("click", () => {
+    trackExportFeature();
+    confirmExport();
+  });
   els.exportCancelBtn.addEventListener("click", closeExportDialog);
   els.exportDialog.querySelectorAll('input[name="exportFormat"]').forEach((input) => {
     input.addEventListener("change", () => {
@@ -3947,7 +3988,10 @@ function bindEvents() {
   els.exportDialog.addEventListener("click", (event) => {
     if (event.target === els.exportDialog) closeExportDialog();
   });
-  els.wordConfirmBtn.addEventListener("click", confirmWordExport);
+  els.wordConfirmBtn.addEventListener("click", () => {
+    trackFeature("convert_word");
+    confirmWordExport();
+  });
   els.wordCancelBtn.addEventListener("click", closeWordExportDialog);
   els.wordDialog.querySelectorAll('input[name="wordScope"]').forEach((input) => {
     input.addEventListener("change", syncWordExportDialog);
@@ -3974,14 +4018,23 @@ function bindEvents() {
   els.addCircleBtn.addEventListener("click", () => addAnnotation("circle"));
   els.highlightTextBtn.addEventListener("pointerdown", (event) => event.preventDefault());
   els.highlightTextBtn.addEventListener("click", activateTextMarkupMode);
-  els.insertImageBtn.addEventListener("click", insertImageAnnotation);
+  els.insertImageBtn.addEventListener("click", () => {
+    trackFeature("insert_image");
+    insertImageAnnotation();
+  });
   els.annotationImageInput.addEventListener("change", handleAnnotationImageInput);
   els.drawBtn.addEventListener("click", toggleDrawingMode);
   els.lineBtn.addEventListener("click", toggleLineMode);
   els.selectToolBtn.addEventListener("click", toggleSelectionMode);
   els.deleteAnnotationBtn.addEventListener("click", deleteSelectedAnnotation);
-  els.watermarkBtn.addEventListener("click", openWatermarkDialog);
-  els.securityBtn.addEventListener("click", openSecurityDialog);
+  els.watermarkBtn.addEventListener("click", () => {
+    trackFeature("watermark");
+    openWatermarkDialog();
+  });
+  els.securityBtn.addEventListener("click", () => {
+    trackFeature("encrypt");
+    openSecurityDialog();
+  });
   els.watermarkCancelBtn.addEventListener("click", closeWatermarkDialog);
   els.watermarkApplyBtn.addEventListener("click", applyWatermarkFromDialog);
   els.watermarkDeleteBtn.addEventListener("click", deleteWatermark);
